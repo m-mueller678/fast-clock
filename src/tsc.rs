@@ -3,7 +3,7 @@ use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct TscInstant(u64);
+pub struct TscInstant(i64);
 
 impl PartialOrd for TscInstant {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -13,7 +13,7 @@ impl PartialOrd for TscInstant {
 
 impl Ord for TscInstant {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.0 as i64).wrapping_sub(other.0 as i64).cmp(&0)
+        (self.0).wrapping_sub(other.0).cmp(&0)
     }
 }
 
@@ -23,7 +23,7 @@ pub struct Tsc(());
 impl Clock for Tsc {
     type Instant = TscInstant;
     fn now(self) -> Self::Instant {
-        TscInstant(unsafe { core::arch::x86_64::_rdtsc() })
+        TscInstant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
     }
 }
 
@@ -88,9 +88,13 @@ impl From<CalibratedTsc> for Tsc {
 }
 
 impl CalibratedClock for CalibratedTsc {
-    fn sub_u64_ns(self, later: TscInstant, earlier: TscInstant) -> u64 {
-        let d = later.0.wrapping_sub(earlier.0);
-        (d as f64 * self.ns_per_cycle).round() as u64
+    fn sub_i64_ns(self, lhs: Self::Instant, rhs: Self::Instant) -> i64 {
+        let d = lhs.0.wrapping_sub(rhs.0);
+        (d as f64 * self.ns_per_cycle).round() as i64
+    }
+
+    fn add_i64_ns(self, base: Self::Instant, offset: i64) -> Self::Instant {
+        TscInstant((offset as f64 / self.ns_per_cycle) as i64 + base.0)
     }
 }
 

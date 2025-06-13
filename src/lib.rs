@@ -1,5 +1,7 @@
 pub mod clock_synchronization;
 pub use clock_synchronization::ClockSynchronization;
+
+#[cfg(all(feature = "tsc", target_arch = "x86_64", target_os = "linux"))]
 pub mod tsc;
 
 pub trait Clock: Copy {
