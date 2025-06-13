@@ -22,6 +22,7 @@ pub struct Tsc(());
 
 impl Clock for Tsc {
     type Instant = TscInstant;
+    #[inline(always)]
     fn now(self) -> Self::Instant {
         TscInstant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
     }
@@ -39,7 +40,17 @@ pub struct CalibratedTsc {
 pub struct TscUnavailable;
 
 impl Tsc {
-    pub fn try_new() -> Result<Self, TscUnavailable> {
+    pub fn try_new_assume_stable() -> Result<Self, TscUnavailable> {
+        let edx = unsafe { core::arch::x86_64::__cpuid(1).edx };
+        if (edx & (1 << 4)) != 0 {
+            Ok(Tsc(()))
+        } else {
+            Err(TscUnavailable)
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn try_new_linux_sys() -> Result<Self, TscUnavailable> {
         let stable_tsc_detected = std::fs::read_to_string(
             "/sys/devices/system/clocksource/clocksource0/available_clocksource",
         )
