@@ -1,11 +1,11 @@
 [package]
 name = "fast-clock"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["m-mueller678"]
 description = "explicit api for alternatives to std::time::Instant"
-repository = "https://github.com/m-mueller678/fast-clockc"
+repository = "https://github.com/m-mueller678/fast-clock"
 readme = "readme.md"
 categories = ["development-tools::profiling","hardware-support","no-std::no-alloc"]
 keywords = ["timing","clock","tsc","nanosecond-timing"]
