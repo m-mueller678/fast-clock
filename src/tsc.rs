@@ -34,10 +34,15 @@ pub struct CalibratedTsc {
     tsc: Tsc,
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("No stable TSC available")]
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct TscUnavailable;
+
+impl core::fmt::Display for TscUnavailable {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        formatter.write_str("No stable TSC available")
+    }
+}
 
 impl Tsc {
     pub fn try_new_assume_stable() -> Result<Self, TscUnavailable> {
