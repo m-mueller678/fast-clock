@@ -1,10 +1,13 @@
+pub mod clock_synchronization;
+pub use clock_synchronization::ClockSynchronization;
+pub mod tsc;
+
 pub trait Clock: Copy {
-    type Instant: Ord;
+    type Instant: Copy + Ord;
     fn now(self) -> Self::Instant;
 }
 
 pub trait CalibratedClock: Clock {
-    fn sub_u64_ns(self, later: Self::Instant, earlier: Self::Instant) -> u64;
+    fn sub_i64_ns(self, lhs: Self::Instant, rhs: Self::Instant) -> i64;
+    fn add_i64_ns(self, base: Self::Instant, offset: i64) -> Self::Instant;
 }
-
-pub mod tsc;
