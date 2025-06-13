@@ -15,7 +15,7 @@ impl<A: CalibratedClock, B: Clock> ClockSynchronization<A, B> {
                 let a0 = a.now();
                 let b = b.now();
                 let a1 = a.now();
-                let da = a.sub_i64_ns(a1, a0);
+                let da = a.between_u64_ns(a1, a0);
                 (a0, b, da)
             })
             .min_by_key(|(.., da)| *da)
@@ -24,18 +24,20 @@ impl<A: CalibratedClock, B: Clock> ClockSynchronization<A, B> {
             a,
             b,
             bt,
-            at: a.add_i64_ns(a0, da / 2),
+            at: a.add_u64_ns(a0, da / 2),
         }
     }
 }
 
 impl<A: CalibratedClock, B: CalibratedClock> ClockSynchronization<A, B> {
     pub fn to_a(&self, t: B::Instant) -> A::Instant {
-        self.a.add_i64_ns(self.at, self.b.sub_i64_ns(t, self.bt))
+        self.a
+            .add_u64_ns(self.at, self.b.between_u64_ns(t, self.bt))
     }
 
     pub fn to_b(&self, t: A::Instant) -> B::Instant {
-        self.b.add_i64_ns(self.bt, self.a.sub_i64_ns(t, self.at))
+        self.b
+            .add_u64_ns(self.bt, self.a.between_u64_ns(t, self.at))
     }
 
     pub fn epoch_a(&self) -> A::Instant {

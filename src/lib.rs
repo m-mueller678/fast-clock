@@ -10,6 +10,7 @@ pub trait Clock: Copy {
 }
 
 pub trait CalibratedClock: Clock {
-    fn sub_i64_ns(self, lhs: Self::Instant, rhs: Self::Instant) -> i64;
-    fn add_i64_ns(self, base: Self::Instant, offset: i64) -> Self::Instant;
+    fn between_u64_ns(self, later: Self::Instant, earlier: Self::Instant) -> u64;
+    fn add_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant;
+    fn sub_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant;
 }

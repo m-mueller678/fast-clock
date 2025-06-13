@@ -70,6 +70,7 @@ impl Tsc {
             let delta = f64::abs(cycles_per_ns - old_cycles);
             if delta / cycles_per_ns < 0.00001 {
                 let ns_per_cycle = cycles_per_ns.recip();
+                debug_assert!(ns_per_cycle > 0.0);
                 return CalibratedTsc {
                     ns_per_cycle,
                     tsc: self,
@@ -88,13 +89,20 @@ impl From<CalibratedTsc> for Tsc {
 }
 
 impl CalibratedClock for CalibratedTsc {
-    fn sub_i64_ns(self, lhs: Self::Instant, rhs: Self::Instant) -> i64 {
-        let d = lhs.0.wrapping_sub(rhs.0);
-        (d as f64 * self.ns_per_cycle).round() as i64
+    fn between_u64_ns(self, later: Self::Instant, earlier: Self::Instant) -> u64 {
+        let d = later.0.wrapping_sub(earlier.0);
+        debug_assert!(d >= 0);
+        (d as f64 * self.ns_per_cycle).round() as u64
     }
 
-    fn add_i64_ns(self, base: Self::Instant, offset: i64) -> Self::Instant {
-        TscInstant((offset as f64 / self.ns_per_cycle) as i64 + base.0)
+    fn add_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant {
+        let offset = offset as f64 / self.ns_per_cycle;
+        TscInstant(base.0.wrapping_add(offset as i64))
+    }
+
+    fn sub_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant {
+        let offset = offset as f64 / self.ns_per_cycle;
+        TscInstant(base.0.wrapping_sub(offset as i64))
     }
 }
 
