@@ -7,4 +7,6 @@ edition = "2024"
 thiserror = "2.0.12"
 
 [features]
+default = ["tsc","std"]
 tsc=[]
+std=[]

@@ -1,8 +1,16 @@
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
+
 pub mod clock_synchronization;
 pub use clock_synchronization::ClockSynchronization;
 
 #[cfg(all(feature = "tsc", target_arch = "x86_64", target_os = "linux"))]
 pub mod tsc;
+
+#[cfg(feature = "std")]
+pub mod std_clocks;
 
 pub trait Clock: Copy {
     type Instant: Copy + Ord;
