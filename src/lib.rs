@@ -3,7 +3,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-pub mod clock_synchronization;
+mod clock_synchronization;
 pub use clock_synchronization::ClockSynchronization;
 
 #[cfg(all(feature = "tsc", target_arch = "x86_64", target_os = "linux"))]
