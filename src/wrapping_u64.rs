@@ -23,27 +23,33 @@ impl Time for WrappingU64Time {
 
     type Duration = WrappingU64Duration;
 
+    #[inline]
     fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
         debug_assert!(Self::instant_cmp(a, b).is_ge());
         WrappingU64Duration(a.0.wrapping_sub(b.0))
     }
 
+    #[inline]
     fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
         WrappingU64Duration(a.0 - b.0)
     }
 
+    #[inline]
     fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
         WrappingU64Duration(a.0 + b.0)
     }
 
+    #[inline]
     fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
         WrappingU64Instant(a.0.wrapping_sub(b.0))
     }
 
+    #[inline]
     fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
         WrappingU64Instant(a.0.wrapping_add(b.0))
     }
 
+    #[inline]
     fn instant_cmp(a: Self::Instant, b: Self::Instant) -> cmp::Ordering {
         (a.0 as i64).wrapping_sub(b.0 as i64).cmp(&0)
     }
@@ -52,6 +58,7 @@ impl Time for WrappingU64Time {
 /// Integer multiply-shift calibration for [`WrappingU64Duration`].
 ///
 /// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
+#[derive(Debug)]
 pub struct U64Calibration {
     to_ns: u64,
     to_ns_shift: u32,
@@ -129,10 +136,12 @@ impl U64Calibration {
 }
 
 impl DurationCalibration<WrappingU64Duration> for U64Calibration {
+    #[inline]
     fn convert_to_ns(&self, d: WrappingU64Duration) -> u64 {
         apply_mul_shift(d.0, self.to_ns, self.to_ns_shift)
     }
 
+    #[inline]
     fn convert_from_ns(&self, ns: u64) -> WrappingU64Duration {
         WrappingU64Duration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
     }
@@ -156,6 +165,7 @@ fn make_mul_shift(from: u64, to: u64) -> (u64, u32) {
     (mul, shift)
 }
 
+#[inline]
 fn apply_mul_shift(x: u64, mul: u64, shift: u32) -> u64 {
     ((mul as u128 * x as u128 + (1u128 << (shift - 1))) >> shift) as u64
 }

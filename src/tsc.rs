@@ -50,8 +50,8 @@ impl Tsc {
 
     /// Returns `Ok(Tsc)` if the Linux kernel reports `tsc` as an available clocksource.
     ///
-    /// A kernel-selected TSC clocksource means the kernel has verified stability across
-    /// cores and power state changes, making it safe for benchmarking.
+    /// A TSC listed as an available clocksource means the kernel has verified stability
+    /// across cores and power state changes, making it safe for benchmarking.
     #[cfg(all(target_os = "linux", feature = "std"))]
     pub fn try_new_linux_sys() -> Result<Self, TscUnavailable> {
         let stable_tsc_detected = std::fs::read_to_string(

@@ -82,7 +82,12 @@ pub mod wrapping_u64;
 pub trait Time {
     type Instant: Copy;
     type Duration: Copy;
+    /// Returns `a - b`. Behavior when `a < b` is unspecified: implementations may
+    /// panic or return a meaningless value. Use [`instant_cmp`](Self::instant_cmp) to
+    /// check ordering first if unsure.
     fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration;
+    /// Returns `a - b`. Behavior when `a < b` is unspecified: implementations may
+    /// panic or return a meaningless value.
     fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration;
     fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration;
     fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant;
