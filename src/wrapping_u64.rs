@@ -1,75 +1,72 @@
 #[cfg(feature = "std")]
 use crate::std_clocks::InstantTime;
 use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
-use core::cmp::Ordering;
+use core::cmp::{self};
 
-/// [`Time`] implementation for clocks that produce raw `i64` tick values.
+/// [`Time`] implementation for clocks that produce raw `u64` tick values.
 ///
 /// All arithmetic uses wrapping semantics so measurements across a counter rollover
-/// remain accurate, provided the elapsed ticks fit in an `i64`.
-///
-/// Assuming a relatively high frequency of 10GHz, you can safely use this as long as all timestamps are within 14 years of each other.
+/// remain accurate, provided the elapsed ticks fit in a `u64` half-range.
 #[derive(Copy, Clone, Debug)]
-pub struct WrappingI64Time;
+pub struct WrappingU64Time;
 
-/// An instant in a [`WrappingI64Time`] domain. The inner value is the raw tick count.
+/// An instant in a [`WrappingU64Time`] domain. The inner value is the raw tick count.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingI64Instant(pub i64);
+pub struct WrappingU64Instant(pub u64);
 
-/// A duration in a [`WrappingI64Time`] domain. The inner value is a signed tick count.
+/// A duration in a [`WrappingU64Time`] domain. The inner value is an unsigned tick count.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingI64Duration(pub i64);
+pub struct WrappingU64Duration(pub u64);
 
-impl Time for WrappingI64Time {
-    const SIGNED_DURATION: bool = true;
+impl Time for WrappingU64Time {
+    type Instant = WrappingU64Instant;
 
-    type Instant = WrappingI64Instant;
-
-    type Duration = WrappingI64Duration;
+    type Duration = WrappingU64Duration;
 
     fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        WrappingI64Duration(a.0.wrapping_sub(b.0))
+        debug_assert!(Self::instant_cmp(a, b).is_ge());
+        WrappingU64Duration(a.0.wrapping_sub(b.0))
     }
 
     fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingI64Duration(a.0.wrapping_sub(b.0))
+        WrappingU64Duration(a.0 - b.0)
     }
 
     fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingI64Duration(a.0.wrapping_add(b.0))
+        WrappingU64Duration(a.0 + b.0)
     }
 
     fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingI64Instant(a.0.wrapping_sub(b.0))
+        WrappingU64Instant(a.0.wrapping_sub(b.0))
     }
 
     fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingI64Instant(a.0.wrapping_add(b.0))
+        WrappingU64Instant(a.0.wrapping_add(b.0))
     }
 
-    fn duration_sign(a: Self::Duration) -> Ordering {
-        a.0.cmp(&0)
+    fn instant_cmp(a: Self::Instant, b: Self::Instant) -> cmp::Ordering {
+        (a.0 as i64).wrapping_sub(b.0 as i64).cmp(&0)
     }
 }
 
-/// Integer multiply-shift calibration for [`WrappingI64Duration`].
+/// Integer multiply-shift calibration for [`WrappingU64Duration`].
 ///
 /// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
-pub struct I64Calibration {
+pub struct U64Calibration {
     to_ns: u64,
     to_ns_shift: u32,
     from_ns: u64,
     from_ns_shift: u32,
 }
 
-impl I64Calibration {
+impl U64Calibration {
     /// Creates a calibration from a measured duration and its nanosecond equivalent.
-    pub fn new(duration: WrappingI64Duration, duration_ns: i64) -> Self {
+    pub fn new(duration: WrappingU64Duration, duration_ns: u64) -> Self {
         assert!(duration.0 > 0);
         assert!(duration_ns > 0);
-        let (to_ns, to_ns_shift) = make_mul_shift(duration.0 as u64, duration_ns as u64);
-        let (from_ns, from_ns_shift) = make_mul_shift(duration_ns as u64, duration.0 as u64);
-        I64Calibration {
+        let (to_ns, to_ns_shift) = make_mul_shift(duration.0, duration_ns);
+        let (from_ns, from_ns_shift) = make_mul_shift(duration_ns, duration.0);
+        U64Calibration {
             to_ns,
             to_ns_shift,
             from_ns,
@@ -81,7 +78,7 @@ impl I64Calibration {
     ///
     /// Returns the calibration and a [`ClockSynchronization`] relating the two clocks to each other
     /// `wait` is invoked with the instant until which it should wait.
-    pub fn new_with_reference_clock<C: Clock<Time = WrappingI64Time>, R: Clock>(
+    pub fn new_with_reference_clock<C: Clock<Time = WrappingU64Time>, R: Clock>(
         clock: &C,
         reference_clock: &CalibratedClock<R>,
         min_duration: <R::Time as Time>::Duration,
@@ -98,7 +95,7 @@ impl I64Calibration {
                 C::Time::instant_sub(s2.epoch_b(), s1.epoch_b()),
                 reference_clock
                     .calibration
-                    .convert_to_i64_ns(R::Time::instant_sub(s2.epoch_a(), s1.epoch_a())),
+                    .convert_to_ns(R::Time::instant_sub(s2.epoch_a(), s1.epoch_a())),
             ),
             s2,
         )
@@ -106,9 +103,9 @@ impl I64Calibration {
 
     /// Calibrates `clock` against `std::time::Instant`, sleeping for at least `min_duration`.
     ///
-    /// This is a convenience wrapper around [`I64Calibration::new_with_reference_clock`] based on [`std::time::Instant`] and [`std::thread::sleep`].
+    /// This is a convenience wrapper around [`U64Calibration::new_with_reference_clock`] based on [`std::time::Instant`] and [`std::thread::sleep`].
     #[cfg(feature = "std")]
-    pub fn new_with_std_instant<C: Clock<Time = WrappingI64Time>>(
+    pub fn new_with_std_instant<C: Clock<Time = WrappingU64Time>>(
         clock: &C,
         min_duration: std::time::Duration,
     ) -> (Self, ClockSynchronization<InstantTime, C::Time>) {
@@ -131,13 +128,13 @@ impl I64Calibration {
     }
 }
 
-impl DurationCalibration<WrappingI64Duration> for I64Calibration {
-    fn convert_to_i64_ns(&self, d: WrappingI64Duration) -> i64 {
+impl DurationCalibration<WrappingU64Duration> for U64Calibration {
+    fn convert_to_ns(&self, d: WrappingU64Duration) -> u64 {
         apply_mul_shift(d.0, self.to_ns, self.to_ns_shift)
     }
 
-    fn convert_from_i64_ns(&self, ns: i64) -> WrappingI64Duration {
-        WrappingI64Duration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
+    fn convert_from_ns(&self, ns: u64) -> WrappingU64Duration {
+        WrappingU64Duration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
     }
 }
 
@@ -159,8 +156,8 @@ fn make_mul_shift(from: u64, to: u64) -> (u64, u32) {
     (mul, shift)
 }
 
-fn apply_mul_shift(x: i64, mul: u64, shift: u32) -> i64 {
-    ((mul as i128 * x as i128 + (1i128 << (shift - 1))) >> shift) as i64
+fn apply_mul_shift(x: u64, mul: u64, shift: u32) -> u64 {
+    ((mul as u128 * x as u128 + (1u128 << (shift - 1))) >> shift) as u64
 }
 
 #[test]
@@ -175,13 +172,9 @@ fn test_make_mul_shift() {
     values.dedup();
     for &from in &values {
         for &to in &values {
-            for sign in [-1, 1] {
-                let (mul, shift) = make_mul_shift(from, to);
-                let from = from as i64 * sign;
-                let to = to as i64 * sign;
-                assert!(mul >= (1 << 63));
-                assert_eq!(apply_mul_shift(from, mul, shift), to);
-            }
+            let (mul, shift) = make_mul_shift(from, to);
+            assert!(mul >= (1 << 63));
+            assert_eq!(apply_mul_shift(from, mul, shift), to);
         }
     }
 }

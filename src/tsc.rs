@@ -1,6 +1,6 @@
 use crate::{
     Clock,
-    wrapping_i64::{I64Calibration, WrappingI64Instant, WrappingI64Time},
+    wrapping_u64::{U64Calibration, WrappingU64Instant, WrappingU64Time},
 };
 
 /// The x86_64 timestamp counter (TSC).
@@ -11,12 +11,12 @@ use crate::{
 pub struct Tsc(());
 
 impl Clock for Tsc {
-    type Time = WrappingI64Time;
-    type Calibration = I64Calibration;
+    type Time = WrappingU64Time;
+    type Calibration = U64Calibration;
 
     #[inline(always)]
-    fn now(&self) -> WrappingI64Instant {
-        WrappingI64Instant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
+    fn now(&self) -> WrappingU64Instant {
+        WrappingU64Instant(unsafe { core::arch::x86_64::_rdtsc() })
     }
 }
 
