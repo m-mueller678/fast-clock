@@ -1,4 +1,6 @@
-use crate::{DurationCallibration, Time};
+#[cfg(feature = "std")]
+use crate::std_clocks::InstantTime;
+use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
 use core::{cmp::Ordering, marker::PhantomData};
 
 #[derive(Copy, Clone, Debug)]
@@ -40,29 +42,75 @@ impl Time for WrappingPrimitiveTime<i64> {
     }
 }
 
-pub struct I64Callibration {
+pub struct I64Calibration {
     to_ns: u64,
     to_ns_shift: u32,
     from_ns: u64,
     from_ns_shift: u32,
 }
 
-impl I64Callibration {
+impl I64Calibration {
     pub fn new(duration: WrappingPrimitiveDuration<i64>, duration_ns: i64) -> Self {
         assert!(duration.0 > 0);
         assert!(duration_ns > 0);
         let (to_ns, to_ns_shift) = make_mul_shift(duration.0 as u64, duration_ns as u64);
         let (from_ns, from_ns_shift) = make_mul_shift(duration_ns as u64, duration.0 as u64);
-        I64Callibration {
+        I64Calibration {
             to_ns,
             to_ns_shift,
             from_ns,
             from_ns_shift,
         }
     }
+
+    pub fn new_with_reference_clock<C: Clock<Time = WrappingPrimitiveTime<i64>>, R: Clock>(
+        clock: &C,
+        reference_clock: &CalibratedClock<R>,
+        min_duration: <R::Time as Time>::Duration,
+        mut wait: impl FnMut(<R::Time as Time>::Instant),
+    ) -> (Self, ClockSynchronization<R::Time, C::Time>) {
+        let s1 = ClockSynchronization::new_aba(&reference_clock, clock);
+        let wait_until = R::Time::mixed_add(s1.epoch_a(), min_duration);
+        while R::Time::instant_cmp(reference_clock.clock.now(), wait_until).is_lt() {
+            wait(wait_until);
+        }
+        let s2 = ClockSynchronization::new_aba(&reference_clock, clock);
+        (
+            Self::new(
+                C::Time::instant_sub(s2.epoch_b(), s1.epoch_b()),
+                reference_clock
+                    .calibration
+                    .convert_to_i64_ns(R::Time::instant_sub(s2.epoch_a(), s1.epoch_a())),
+            ),
+            s2,
+        )
+    }
+
+    #[cfg(feature = "std")]
+    pub fn new_with_std_instant<C: Clock<Time = WrappingPrimitiveTime<i64>>>(
+        clock: &C,
+        min_duration: std::time::Duration,
+    ) -> (Self, ClockSynchronization<InstantTime, C::Time>) {
+        use crate::{InherentlyCalibrated, std_clocks::InstantClock};
+
+        Self::new_with_reference_clock(
+            clock,
+            &CalibratedClock {
+                clock: InstantClock,
+                calibration: InherentlyCalibrated,
+            },
+            min_duration,
+            |until| {
+                let now = std::time::Instant::now();
+                if let Some(remaining) = until.checked_duration_since(now) {
+                    std::thread::sleep(remaining);
+                }
+            },
+        )
+    }
 }
 
-impl DurationCallibration<WrappingPrimitiveDuration<i64>> for I64Callibration {
+impl DurationCalibration<WrappingPrimitiveDuration<i64>> for I64Calibration {
     fn convert_to_i64_ns(&self, d: WrappingPrimitiveDuration<i64>) -> i64 {
         apply_mul_shift(d.0, self.to_ns, self.to_ns_shift)
     }

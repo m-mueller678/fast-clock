@@ -1,4 +1,4 @@
-use crate::{Clock, DurationCallibration, InherentlyCallibrated, Time};
+use crate::{Clock, DurationCalibration, InherentlyCalibrated, Time};
 use core::cmp::Ordering;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -82,9 +82,9 @@ macro_rules! std_clock {
 
         impl Clock for $Clock {
             type Time = $TimeType;
-            type Callibration = InherentlyCallibrated;
+            type Calibration = InherentlyCalibrated;
 
-            fn now(self) -> $Instant {
+            fn now(&self) -> $Instant {
                 <$Instant>::now()
             }
         }
@@ -94,7 +94,7 @@ macro_rules! std_clock {
 std_clock!(Instant, InstantClock, InstantTime);
 std_clock!(SystemTime, SystemClock, SystemTimeTime);
 
-impl DurationCallibration<Duration> for InherentlyCallibrated {
+impl DurationCalibration<Duration> for InherentlyCalibrated {
     fn convert_to_i64_ns(&self, d: Duration) -> i64 {
         d.as_nanos().try_into().unwrap()
     }
