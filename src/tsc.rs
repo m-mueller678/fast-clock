@@ -1,20 +1,18 @@
 use crate::{
     Clock, DurationCalibration,
-    primitive::{
-        I64Calibration, WrappingPrimitiveDuration, WrappingPrimitiveInstant, WrappingPrimitiveTime,
-    },
+    wrapping_i64::{I64Calibration, WrappingI64Duration, WrappingI64Instant, WrappingI64Time},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Tsc(());
 
 impl Clock for Tsc {
-    type Time = WrappingPrimitiveTime<i64>;
+    type Time = WrappingI64Time;
     type Calibration = I64Calibration;
 
     #[inline(always)]
-    fn now(&self) -> WrappingPrimitiveInstant<i64> {
-        WrappingPrimitiveInstant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
+    fn now(&self) -> WrappingI64Instant {
+        WrappingI64Instant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
     }
 }
 
@@ -25,23 +23,23 @@ pub struct CalibratedTsc {
 }
 
 impl Clock for CalibratedTsc {
-    type Time = WrappingPrimitiveTime<i64>;
+    type Time = WrappingI64Time;
     type Calibration = Self;
 
-    fn now(&self) -> WrappingPrimitiveInstant<i64> {
+    fn now(&self) -> WrappingI64Instant {
         self.tsc.now()
     }
 }
 
-impl DurationCalibration<WrappingPrimitiveDuration<i64>> for CalibratedTsc {
-    fn convert_to_i64_ns(&self, d: WrappingPrimitiveDuration<i64>) -> i64 {
+impl DurationCalibration<WrappingI64Duration> for CalibratedTsc {
+    fn convert_to_i64_ns(&self, d: WrappingI64Duration) -> i64 {
         let cycles = d.0;
         debug_assert!(cycles >= 0);
         (cycles as f64 * self.ns_per_cycle).round() as i64
     }
-    fn convert_from_i64_ns(&self, ns: i64) -> WrappingPrimitiveDuration<i64> {
+    fn convert_from_i64_ns(&self, ns: i64) -> WrappingI64Duration {
         let cycles = (ns as f64 / self.ns_per_cycle).round() as i64;
-        WrappingPrimitiveDuration(cycles)
+        WrappingI64Duration(cycles)
     }
 }
 

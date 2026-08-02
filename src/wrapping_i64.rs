@@ -1,40 +1,40 @@
 #[cfg(feature = "std")]
 use crate::std_clocks::InstantTime;
 use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
-use core::{cmp::Ordering, marker::PhantomData};
+use core::cmp::Ordering;
 
 #[derive(Copy, Clone, Debug)]
-pub struct WrappingPrimitiveTime<T>(PhantomData<T>);
+pub struct WrappingI64Time;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingPrimitiveInstant<T>(pub T);
+pub struct WrappingI64Instant(pub i64);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingPrimitiveDuration<T>(pub T);
+pub struct WrappingI64Duration(pub i64);
 
-impl Time for WrappingPrimitiveTime<i64> {
+impl Time for WrappingI64Time {
     const SIGNED_DURATION: bool = true;
 
-    type Instant = WrappingPrimitiveInstant<i64>;
+    type Instant = WrappingI64Instant;
 
-    type Duration = WrappingPrimitiveDuration<i64>;
+    type Duration = WrappingI64Duration;
 
     fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_sub(b.0))
+        WrappingI64Duration(a.0.wrapping_sub(b.0))
     }
 
     fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_sub(b.0))
+        WrappingI64Duration(a.0.wrapping_sub(b.0))
     }
 
     fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_add(b.0))
+        WrappingI64Duration(a.0.wrapping_add(b.0))
     }
 
     fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingPrimitiveInstant(a.0.wrapping_sub(b.0))
+        WrappingI64Instant(a.0.wrapping_sub(b.0))
     }
 
     fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingPrimitiveInstant(a.0.wrapping_add(b.0))
+        WrappingI64Instant(a.0.wrapping_add(b.0))
     }
 
     fn duration_sign(a: Self::Duration) -> Ordering {
@@ -50,7 +50,7 @@ pub struct I64Calibration {
 }
 
 impl I64Calibration {
-    pub fn new(duration: WrappingPrimitiveDuration<i64>, duration_ns: i64) -> Self {
+    pub fn new(duration: WrappingI64Duration, duration_ns: i64) -> Self {
         assert!(duration.0 > 0);
         assert!(duration_ns > 0);
         let (to_ns, to_ns_shift) = make_mul_shift(duration.0 as u64, duration_ns as u64);
@@ -63,18 +63,18 @@ impl I64Calibration {
         }
     }
 
-    pub fn new_with_reference_clock<C: Clock<Time = WrappingPrimitiveTime<i64>>, R: Clock>(
+    pub fn new_with_reference_clock<C: Clock<Time = WrappingI64Time>, R: Clock>(
         clock: &C,
         reference_clock: &CalibratedClock<R>,
         min_duration: <R::Time as Time>::Duration,
         mut wait: impl FnMut(<R::Time as Time>::Instant),
     ) -> (Self, ClockSynchronization<R::Time, C::Time>) {
-        let s1 = ClockSynchronization::new_aba(&reference_clock, clock);
+        let s1 = ClockSynchronization::new_aba(reference_clock, clock);
         let wait_until = R::Time::mixed_add(s1.epoch_a(), min_duration);
         while R::Time::instant_cmp(reference_clock.clock.now(), wait_until).is_lt() {
             wait(wait_until);
         }
-        let s2 = ClockSynchronization::new_aba(&reference_clock, clock);
+        let s2 = ClockSynchronization::new_aba(reference_clock, clock);
         (
             Self::new(
                 C::Time::instant_sub(s2.epoch_b(), s1.epoch_b()),
@@ -87,7 +87,7 @@ impl I64Calibration {
     }
 
     #[cfg(feature = "std")]
-    pub fn new_with_std_instant<C: Clock<Time = WrappingPrimitiveTime<i64>>>(
+    pub fn new_with_std_instant<C: Clock<Time = WrappingI64Time>>(
         clock: &C,
         min_duration: std::time::Duration,
     ) -> (Self, ClockSynchronization<InstantTime, C::Time>) {
@@ -110,13 +110,13 @@ impl I64Calibration {
     }
 }
 
-impl DurationCalibration<WrappingPrimitiveDuration<i64>> for I64Calibration {
-    fn convert_to_i64_ns(&self, d: WrappingPrimitiveDuration<i64>) -> i64 {
+impl DurationCalibration<WrappingI64Duration> for I64Calibration {
+    fn convert_to_i64_ns(&self, d: WrappingI64Duration) -> i64 {
         apply_mul_shift(d.0, self.to_ns, self.to_ns_shift)
     }
 
-    fn convert_from_i64_ns(&self, ns: i64) -> WrappingPrimitiveDuration<i64> {
-        WrappingPrimitiveDuration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
+    fn convert_from_i64_ns(&self, ns: i64) -> WrappingI64Duration {
+        WrappingI64Duration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
     }
 }
 

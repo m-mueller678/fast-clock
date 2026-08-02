@@ -60,10 +60,7 @@ impl<A: Time, B: Time> ClockSynchronization<A, B> {
 // TODO maybe derive?
 impl<A: Time, B: Time> Clone for ClockSynchronization<A, B> {
     fn clone(&self) -> Self {
-        ClockSynchronization {
-            at: self.at,
-            bt: self.bt,
-        }
+        *self
     }
 }
 

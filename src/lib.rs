@@ -8,11 +8,11 @@ use core::cmp::{self, Ordering};
 
 pub use clock_synchronization::ClockSynchronization;
 
-pub mod primitive;
 #[cfg(feature = "std")]
 pub mod std_clocks;
 #[cfg(all(feature = "tsc", target_arch = "x86_64"))]
 pub mod tsc;
+pub mod wrapping_i64;
 
 pub trait Time {
     const SIGNED_DURATION: bool;
@@ -52,7 +52,7 @@ pub trait DurationCalibration<D> {
         std::time::Duration::from_nanos(ns as u64)
     }
     #[cfg(feature = "std")]
-    fn from_std(&self, d: std::time::Duration) -> D
+    fn convert_from_std(&self, d: std::time::Duration) -> D
     where
         Self: Sized,
     {
