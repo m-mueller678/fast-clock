@@ -7,6 +7,11 @@ pub struct ClockSynchronization<A: Time, B: Time> {
 }
 
 impl<A: Time, B: Time> ClockSynchronization<A, B> {
+    /// Creates a synchronization from a known pair of corresponding instants.
+    pub fn new(epoch_a: A::Instant, epoch_b: B::Instant) -> Self {
+        ClockSynchronization { epoch_a, epoch_b }
+    }
+
     /// Creates a synchronization by sampling both clocks in an A-B-A pattern.
     ///
     /// Multiple measurements are performed and the one with least error is selected.
