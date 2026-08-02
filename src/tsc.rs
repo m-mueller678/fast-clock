@@ -1,30 +1,19 @@
-use crate::{CalibratedClock, Clock};
+use crate::{
+    Clock, DurationCallibration,
+    primitive::{WrappingPrimitiveDuration, WrappingPrimitiveInstant, WrappingPrimitiveTime},
+};
 use std::time::Instant;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct TscInstant(i64);
-
-impl PartialOrd for TscInstant {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.0.cmp(&other.0))
-    }
-}
-
-impl Ord for TscInstant {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.0).wrapping_sub(other.0).cmp(&0)
-    }
-}
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Tsc(());
 
 impl Clock for Tsc {
-    type Instant = TscInstant;
+    type Time = WrappingPrimitiveTime<i64>;
+    type Callibration = CalibratedTsc;
+
     #[inline(always)]
-    fn now(self) -> Self::Instant {
-        TscInstant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
+    fn now(self) -> WrappingPrimitiveInstant<i64> {
+        WrappingPrimitiveInstant(unsafe { core::arch::x86_64::_rdtsc() } as i64)
     }
 }
 
@@ -32,6 +21,27 @@ impl Clock for Tsc {
 pub struct CalibratedTsc {
     ns_per_cycle: f64,
     tsc: Tsc,
+}
+
+impl Clock for CalibratedTsc {
+    type Time = WrappingPrimitiveTime<i64>;
+    type Callibration = Self;
+
+    fn now(self) -> WrappingPrimitiveInstant<i64> {
+        self.tsc.now()
+    }
+}
+
+impl DurationCallibration<WrappingPrimitiveDuration<i64>> for CalibratedTsc {
+    fn convert_to_i64_ns(&self, d: WrappingPrimitiveDuration<i64>) -> i64 {
+        let cycles = d.0;
+        debug_assert!(cycles >= 0);
+        (cycles as f64 * self.ns_per_cycle).round() as i64
+    }
+    fn convert_from_i64_ns(&self, ns: i64) -> WrappingPrimitiveDuration<i64> {
+        let cycles = (ns as f64 / self.ns_per_cycle).round() as i64;
+        WrappingPrimitiveDuration(cycles)
+    }
 }
 
 #[derive(Debug)]
@@ -46,7 +56,7 @@ impl core::fmt::Display for TscUnavailable {
 
 impl Tsc {
     pub fn try_new_assume_stable() -> Result<Self, TscUnavailable> {
-        let edx = unsafe { core::arch::x86_64::__cpuid(1).edx };
+        let edx = core::arch::x86_64::__cpuid(1).edx;
         if (edx & (1 << 4)) != 0 {
             Ok(Tsc(()))
         } else {
@@ -101,30 +111,5 @@ impl Tsc {
 impl From<CalibratedTsc> for Tsc {
     fn from(value: CalibratedTsc) -> Self {
         value.tsc
-    }
-}
-
-impl CalibratedClock for CalibratedTsc {
-    fn between_u64_ns(self, later: Self::Instant, earlier: Self::Instant) -> u64 {
-        let d = later.0.wrapping_sub(earlier.0);
-        debug_assert!(d >= 0);
-        (d as f64 * self.ns_per_cycle).round() as u64
-    }
-
-    fn add_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant {
-        let offset = offset as f64 / self.ns_per_cycle;
-        TscInstant(base.0.wrapping_add(offset as i64))
-    }
-
-    fn sub_u64_ns(self, base: Self::Instant, offset: u64) -> Self::Instant {
-        let offset = offset as f64 / self.ns_per_cycle;
-        TscInstant(base.0.wrapping_sub(offset as i64))
-    }
-}
-
-impl Clock for CalibratedTsc {
-    type Instant = TscInstant;
-    fn now(self) -> Self::Instant {
-        self.tsc.now()
     }
 }

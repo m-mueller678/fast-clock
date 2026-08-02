@@ -4,15 +4,15 @@
 extern crate std;
 
 mod clock_synchronization;
-use core::{cmp::Ordering, marker::PhantomData};
+use core::cmp::Ordering;
 
 pub use clock_synchronization::ClockSynchronization;
 
-#[cfg(all(feature = "tsc", target_arch = "x86_64"))]
-pub mod tsc;
-
+pub mod primitive;
 #[cfg(feature = "std")]
 pub mod std_clocks;
+#[cfg(all(feature = "tsc", target_arch = "x86_64"))]
+pub mod tsc;
 
 pub trait Time {
     const SIGNED_DURATION: bool;
@@ -26,98 +26,33 @@ pub trait Time {
     fn duration_sign(a: Self::Duration) -> Ordering;
 }
 
-pub struct WrappingPrimitiveTime<T>(PhantomData<T>);
-pub struct WrappingPrimitiveInstant<T>(pub T);
-pub struct WrappingPrimitiveDuration<T>(pub T);
-
-impl Time for WrappingPrimitiveTime<i64> {
-    const SIGNED_DURATION: bool = true;
-
-    type Instant = WrappingPrimitiveInstant<i64>;
-
-    type Duration = WrappingPrimitiveDuration<i64>;
-
-    fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_sub(b.0))
-    }
-
-    fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_sub(b.0))
-    }
-
-    fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingPrimitiveDuration(a.0.wrapping_add(b.0))
-    }
-
-    fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingPrimitiveInstant(a.0.wrapping_sub(b.0))
-    }
-
-    fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingPrimitiveInstant(a.0.wrapping_add(b.0))
-    }
-
-    fn duration_sign(a: Self::Duration) -> Ordering {
-        a.0.cmp(&0)
-    }
-}
-
-#[cfg(feature = "std")]
-pub struct StdTime;
-#[cfg(feature = "std")]
-impl Time for StdTime {
-    const SIGNED_DURATION: bool = false;
-
-    type Instant = std::time::Instant;
-
-    type Duration = std::time::Duration;
-
-    fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        a - b
-    }
-
-    fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        a - b
-    }
-
-    fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        a + b
-    }
-
-    fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        a - b
-    }
-
-    fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        a + b
-    }
-
-    fn duration_sign(a: Self::Duration) -> Ordering {
-        if a.is_zero() {
-            Ordering::Equal
-        } else {
-            Ordering::Greater
-        }
-    }
-}
-
 pub trait Clock {
     type Time: Time;
-    type Callibration: DurationCallibration<T: Time>;
+    type Callibration: DurationCallibration<<Self::Time as Time>::Duration>;
     fn now(self) -> <Self::Time as Time>::Instant;
 }
 
-trait DurationCallibration<D> {
-    fn to_i64_ns(d: D) -> i64;
-    fn to_i128_ns(d: D) -> i128;
+pub trait DurationCallibration<D> {
+    fn convert_to_i64_ns(&self, d: D) -> i64;
+    fn convert_from_i64_ns(&self, ns: i64) -> D;
     #[cfg(feature = "std")]
-    fn to_std(d: D) -> std::time::Duration {
-        let ns = Self::to_i128_ns(d);
+    fn to_std(&self, d: D) -> std::time::Duration
+    where
+        Self: Sized,
+    {
+        let ns = self.convert_to_i64_ns(d);
         assert!(
             ns >= 0,
             "negative duration cannot be converted to std::time::Duration"
         );
-        std::time::Duration::from_nanos_u128(ns as u128)
+        std::time::Duration::from_nanos(ns as u64)
+    }
+    #[cfg(feature = "std")]
+    fn from_std(&self, d: std::time::Duration) -> D
+    where
+        Self: Sized,
+    {
+        self.convert_from_i64_ns(d.as_nanos() as i64)
     }
 }
 
@@ -125,3 +60,5 @@ pub struct CallibratedClock<C: Clock> {
     pub clock: C,
     pub callibration: C::Callibration,
 }
+
+pub struct InherentlyCallibrated;
