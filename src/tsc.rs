@@ -7,7 +7,7 @@ use crate::{
 ///
 /// Note that not all TSC implementations have a constant frequency.
 /// On Linux, [`try_new_linux_sys`](Self::try_new_linux_sys) checks that the frequency is constant.
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Tsc(());
 
 impl Clock for Tsc {

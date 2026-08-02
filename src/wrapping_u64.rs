@@ -58,7 +58,7 @@ impl Time for WrappingU64Time {
 /// Integer multiply-shift calibration for [`WrappingU64Duration`].
 ///
 /// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct U64Calibration {
     to_ns: u64,
     to_ns_shift: u32,

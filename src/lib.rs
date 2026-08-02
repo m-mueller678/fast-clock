@@ -128,6 +128,7 @@ pub trait DurationCalibration<D> {
 }
 
 /// A [`Clock`] bundled with its [`DurationCalibration`].
+#[derive(Clone, Copy, Debug)]
 pub struct CalibratedClock<C: Clock> {
     pub clock: C,
     pub calibration: C::Calibration,
@@ -146,4 +147,5 @@ impl<C: Clock<Calibration = InherentlyCalibrated>> CalibratedClock<C> {
 /// Calibration type for clocks whose native duration is already in nanoseconds.
 ///
 /// Used with [`std_clocks::InstantClock`] and [`std_clocks::SystemClock`].
+#[derive(Clone, Copy, Debug)]
 pub struct InherentlyCalibrated;
