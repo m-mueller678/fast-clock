@@ -3,10 +3,21 @@ use crate::std_clocks::InstantTime;
 use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
 use core::cmp::Ordering;
 
+/// [`Time`] implementation for clocks that produce raw `i64` tick values.
+///
+/// All arithmetic uses wrapping semantics so measurements across a counter rollover
+/// remain accurate, provided the elapsed ticks fit in an `i64`.
+///
+/// Assuming a relatively high frequency of 10GHz, you can safely use this as long as all timestamps are within 14 years of each other.
+
 #[derive(Copy, Clone, Debug)]
 pub struct WrappingI64Time;
+
+/// An instant in a [`WrappingI64Time`] domain. The inner value is the raw tick count.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WrappingI64Instant(pub i64);
+
+/// A duration in a [`WrappingI64Time`] domain. The inner value is a signed tick count.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WrappingI64Duration(pub i64);
 
@@ -42,6 +53,9 @@ impl Time for WrappingI64Time {
     }
 }
 
+/// Integer multiply-shift calibration for [`WrappingI64Duration`].
+///
+/// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
 pub struct I64Calibration {
     to_ns: u64,
     to_ns_shift: u32,
@@ -50,6 +64,7 @@ pub struct I64Calibration {
 }
 
 impl I64Calibration {
+    /// Creates a calibration from a measured duration and its nanosecond equivalent.
     pub fn new(duration: WrappingI64Duration, duration_ns: i64) -> Self {
         assert!(duration.0 > 0);
         assert!(duration_ns > 0);
@@ -63,18 +78,22 @@ impl I64Calibration {
         }
     }
 
+    /// Calibrates `clock` against `reference_clock`, calling `wait` until `min_duration` elapses.
+    ///
+    /// Returns the calibration and a [`ClockSynchronization`] relating the two clocks to each other
+    /// `wait` is invoked with the instant until which it should wait.
     pub fn new_with_reference_clock<C: Clock<Time = WrappingI64Time>, R: Clock>(
         clock: &C,
         reference_clock: &CalibratedClock<R>,
         min_duration: <R::Time as Time>::Duration,
         mut wait: impl FnMut(<R::Time as Time>::Instant),
     ) -> (Self, ClockSynchronization<R::Time, C::Time>) {
-        let s1 = ClockSynchronization::new_aba(reference_clock, clock);
+        let s1 = ClockSynchronization::new_aba_calibrated(reference_clock, clock);
         let wait_until = R::Time::mixed_add(s1.epoch_a(), min_duration);
         while R::Time::instant_cmp(reference_clock.clock.now(), wait_until).is_lt() {
             wait(wait_until);
         }
-        let s2 = ClockSynchronization::new_aba(reference_clock, clock);
+        let s2 = ClockSynchronization::new_aba_calibrated(reference_clock, clock);
         (
             Self::new(
                 C::Time::instant_sub(s2.epoch_b(), s1.epoch_b()),
@@ -86,6 +105,9 @@ impl I64Calibration {
         )
     }
 
+    /// Calibrates `clock` against `std::time::Instant`, sleeping for at least `min_duration`.
+    ///
+    /// This is a convenience wrapper around [`I64Calibration::new_with_reference_clock`] based on [`std::time::Instant`] and [`std::thread::sleep`].
     #[cfg(feature = "std")]
     pub fn new_with_std_instant<C: Clock<Time = WrappingI64Time>>(
         clock: &C,

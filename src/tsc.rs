@@ -3,6 +3,10 @@ use crate::{
     wrapping_i64::{I64Calibration, WrappingI64Duration, WrappingI64Instant, WrappingI64Time},
 };
 
+/// The x86_64 timestamp counter (TSC).
+///
+/// Note that not all TSC implementations have a constant frequency.
+/// On Linux, [`try_new_linux_sys`](Self::try_new_linux_sys) checks that the frequency is constant.
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Tsc(());
 
@@ -43,6 +47,7 @@ impl DurationCalibration<WrappingI64Duration> for CalibratedTsc {
     }
 }
 
+/// Error returned when a stable TSC is not available on the current system.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct TscUnavailable;
@@ -54,6 +59,10 @@ impl core::fmt::Display for TscUnavailable {
 }
 
 impl Tsc {
+    /// Returns `Ok(Tsc)` if the CPUID TSC flag is set.
+    ///
+    /// The TSC flag indicates the counter exists but does not guarantee stability
+    /// across cores or CPU power states. Prefer [`Tsc::try_new_linux_sys`] on Linux.
     pub fn try_new_assume_stable() -> Result<Self, TscUnavailable> {
         let edx = core::arch::x86_64::__cpuid(1).edx;
         if (edx & (1 << 4)) != 0 {
@@ -64,6 +73,10 @@ impl Tsc {
     }
 
     #[cfg(target_os = "linux")]
+    /// Returns `Ok(Tsc)` if the Linux kernel reports `tsc` as an available clocksource.
+    ///
+    /// A kernel-selected TSC clocksource means the kernel has verified stability across
+    /// cores and power state changes, making it safe for benchmarking.
     pub fn try_new_linux_sys() -> Result<Self, TscUnavailable> {
         let stable_tsc_detected = std::fs::read_to_string(
             "/sys/devices/system/clocksource/clocksource0/available_clocksource",
