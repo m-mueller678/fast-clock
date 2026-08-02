@@ -1,6 +1,6 @@
 use crate::{
-    Clock, DurationCalibration,
-    wrapping_i64::{I64Calibration, WrappingI64Duration, WrappingI64Instant, WrappingI64Time},
+    Clock,
+    wrapping_i64::{I64Calibration, WrappingI64Instant, WrappingI64Time},
 };
 
 /// The x86_64 timestamp counter (TSC).
@@ -20,33 +20,6 @@ impl Clock for Tsc {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct CalibratedTsc {
-    ns_per_cycle: f64,
-    tsc: Tsc,
-}
-
-impl Clock for CalibratedTsc {
-    type Time = WrappingI64Time;
-    type Calibration = Self;
-
-    fn now(&self) -> WrappingI64Instant {
-        self.tsc.now()
-    }
-}
-
-impl DurationCalibration<WrappingI64Duration> for CalibratedTsc {
-    fn convert_to_i64_ns(&self, d: WrappingI64Duration) -> i64 {
-        let cycles = d.0;
-        debug_assert!(cycles >= 0);
-        (cycles as f64 * self.ns_per_cycle).round() as i64
-    }
-    fn convert_from_i64_ns(&self, ns: i64) -> WrappingI64Duration {
-        let cycles = (ns as f64 / self.ns_per_cycle).round() as i64;
-        WrappingI64Duration(cycles)
-    }
-}
-
 /// Error returned when a stable TSC is not available on the current system.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -57,6 +30,9 @@ impl core::fmt::Display for TscUnavailable {
         formatter.write_str("No stable TSC available")
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for TscUnavailable {}
 
 impl Tsc {
     /// Returns `Ok(Tsc)` if the CPUID TSC flag is set.
@@ -72,11 +48,11 @@ impl Tsc {
         }
     }
 
-    #[cfg(target_os = "linux")]
     /// Returns `Ok(Tsc)` if the Linux kernel reports `tsc` as an available clocksource.
     ///
     /// A kernel-selected TSC clocksource means the kernel has verified stability across
     /// cores and power state changes, making it safe for benchmarking.
+    #[cfg(all(target_os = "linux", feature = "std"))]
     pub fn try_new_linux_sys() -> Result<Self, TscUnavailable> {
         let stable_tsc_detected = std::fs::read_to_string(
             "/sys/devices/system/clocksource/clocksource0/available_clocksource",

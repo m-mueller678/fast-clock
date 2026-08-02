@@ -9,7 +9,6 @@ use core::cmp::Ordering;
 /// remain accurate, provided the elapsed ticks fit in an `i64`.
 ///
 /// Assuming a relatively high frequency of 10GHz, you can safely use this as long as all timestamps are within 14 years of each other.
-
 #[derive(Copy, Clone, Debug)]
 pub struct WrappingI64Time;
 

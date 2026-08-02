@@ -46,7 +46,7 @@
 //! let duration_ns: i64 = clock.calibration.convert_to_i64_ns(duration);
 //!
 //! // Convert a TSC instant to std::time::Instant using the synchronization point.
-//! let std_instant = sync.to_a(&t0, &InherentlyCalibrated, &clock.calibration);
+//! let std_instant = sync.to_a(t0, &InherentlyCalibrated, &clock.calibration);
 //! # }
 //! ```
 //!
@@ -129,7 +129,10 @@ pub trait DurationCalibration<D> {
     where
         Self: Sized,
     {
-        self.convert_from_i64_ns(d.as_nanos() as i64)
+        self.convert_from_i64_ns(
+            i64::try_from(d.as_nanos())
+                .expect("duration exceeds i64::MAX nanoseconds (~292 years)"),
+        )
     }
 }
 
