@@ -3,25 +3,128 @@ use crate::std_clocks::InstantTime;
 use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
 use core::cmp::{self};
 
-/// [`Time`] implementation for clocks that produce raw `u64` tick values.
+/// [`Time`] implementation for clocks that produce raw `u64` tick values and wrap around at `2^BITS`.
 ///
 /// All arithmetic uses wrapping semantics so measurements across a counter rollover
-/// remain accurate, provided the elapsed ticks fit in a `u64` half-range.
+/// remain accurate, provided the involved timestamps are less than `2^(BITS-1)` ticks apart.
 #[derive(Copy, Clone, Debug)]
-pub struct WrappingU64Time;
+pub struct WrappingU64Time<const BITS: u32 = 64>;
 
-/// An instant in a [`WrappingU64Time`] domain. The inner value is the raw tick count.
+/// An instant in a [`WrappingU64Time`] domain.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingU64Instant(pub u64);
+pub struct WrappingU64Instant<const BITS: u32 = 64>(u64);
 
-/// A duration in a [`WrappingU64Time`] domain. The inner value is an unsigned tick count.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WrappingU64Duration(pub u64);
+/// A non-negative duration in a [`WrappingU64Time`] domain.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+pub struct WrappingU64Duration<const BITS: u32 = 64>(u64);
 
-impl Time for WrappingU64Time {
-    type Instant = WrappingU64Instant;
+const fn assert_bits(x: u32) {
+    assert!(x > 0 && x <= 64);
+}
+#[inline]
+#[track_caller]
+fn debug_assert_in_range(x: u64, unused_bits: u32) {
+    let mask = u64::MAX >> unused_bits;
+    debug_assert!(x & mask == x);
+}
+impl<const BITS: u32> WrappingU64Instant<BITS> {
+    /// Construct an instant from a clock reading in the range `0..2^BITS`.
+    #[inline]
+    pub fn new(x: u64) -> Self {
+        debug_assert_in_range(x, Self::UNUSED_BITS);
+        Self::wrapping_new(x)
+    }
+    /// Construct an instant from an arbitrary `u64` value.
+    ///
+    /// The provided value may be greater than `2^BITS`.
+    /// The instant will behave as if the top bits had been masked off.
+    /// When and how this masking is performed is unspecified.
+    #[inline]
+    pub fn wrapping_new(x: u64) -> Self {
+        const { assert_bits(BITS) };
+        Self(x << Self::UNUSED_BITS)
+    }
 
-    type Duration = WrappingU64Duration;
+    /// Convert to a tick count in the range `0..2^BITS`.
+    ///
+    /// If `BITS<64`, this type may use additional bits for extra precission.
+    /// The rounding behaviour of `to_ticks` is unspecified.
+    #[inline]
+    pub fn to_ticks(self) -> u64 {
+        self.0 >> Self::UNUSED_BITS
+    }
+
+    /// Return the internal representation of this type.
+    ///
+    /// It is unspecified how this maps to clock ticks.
+    #[inline]
+    pub fn to_bits(self) -> u64 {
+        self.0
+    }
+
+    /// Reconstruct an instant from its internal representation.
+    ///
+    /// This should only be called with values obtained from [`to_bits`](Self::to_bits).
+    #[inline]
+    pub fn from_bits(x: u64) -> Self {
+        const { assert_bits(BITS) };
+        Self(x)
+    }
+
+    const UNUSED_BITS: u32 = 64 - BITS;
+}
+
+impl<const BITS: u32> WrappingU64Duration<BITS> {
+    /// Construct a duration from a tick count in the range `0..2^BITS`.
+    #[inline]
+    pub fn new(x: u64) -> Self {
+        debug_assert_in_range(x, Self::UNUSED_BITS);
+        Self::wrapping_new(x)
+    }
+    /// Construct a duration from an arbitrary `u64` value.
+    ///
+    /// The provided value may be greater than `2^BITS`.
+    /// The duration will behave as if the top bits had been masked off.
+    /// When and how this masking is performed is unspecified.
+    #[inline]
+    pub fn wrapping_new(x: u64) -> Self {
+        const { assert_bits(BITS) };
+        Self(x << Self::UNUSED_BITS)
+    }
+
+    /// Convert to a tick count in the range `0..2^BITS`.
+    ///
+    /// If `BITS<64`, this type may use additional bits for extra precission.
+    /// The rounding behaviour of `to_ticks` is unspecified.
+    #[inline]
+    pub fn to_ticks(self) -> u64 {
+        self.0 >> Self::UNUSED_BITS
+    }
+
+    /// Return the internal representation of this type.
+    ///
+    /// It is unspecified how this maps to clock ticks.
+    #[inline]
+    pub fn to_bits(self) -> u64 {
+        self.0
+    }
+
+    /// Reconstruct a duration from its internal representation.
+    ///
+    /// This should only be called with values obtained from [`to_bits`](Self::to_bits).
+    #[inline]
+    pub fn from_bits(x: u64) -> Self {
+        const { assert_bits(BITS) };
+        Self(x)
+    }
+
+    const UNUSED_BITS: u32 = 64 - BITS;
+}
+
+impl<const BITS: u32> Time for WrappingU64Time<BITS> {
+    type Instant = WrappingU64Instant<BITS>;
+
+    type Duration = WrappingU64Duration<BITS>;
 
     #[inline]
     fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
@@ -59,16 +162,16 @@ impl Time for WrappingU64Time {
 ///
 /// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
 #[derive(Clone, Copy, Debug)]
-pub struct U64Calibration {
+pub struct U64Calibration<const BITS: u32 = 64> {
     to_ns: u64,
     to_ns_shift: u32,
     from_ns: u64,
     from_ns_shift: u32,
 }
 
-impl U64Calibration {
+impl<const BITS: u32> U64Calibration<BITS> {
     /// Creates a calibration from a measured duration and its nanosecond equivalent.
-    pub fn new(duration: WrappingU64Duration, duration_ns: u64) -> Self {
+    pub fn new(duration: WrappingU64Duration<BITS>, duration_ns: u64) -> Self {
         assert!(duration.0 > 0);
         assert!(duration_ns > 0);
         let (to_ns, to_ns_shift) = make_mul_shift(duration.0, duration_ns);
@@ -85,7 +188,7 @@ impl U64Calibration {
     ///
     /// Returns the calibration and a [`ClockSynchronization`] relating the two clocks to each other
     /// `wait` is invoked with the instant until which it should wait.
-    pub fn new_with_reference_clock<C: Clock<Time = WrappingU64Time>, R: Clock>(
+    pub fn new_with_reference_clock<C: Clock<Time = WrappingU64Time<BITS>>, R: Clock>(
         clock: &C,
         reference_clock: &CalibratedClock<R>,
         min_duration: <R::Time as Time>::Duration,
@@ -112,7 +215,7 @@ impl U64Calibration {
     ///
     /// This is a convenience wrapper around [`U64Calibration::new_with_reference_clock`] based on [`std::time::Instant`] and [`std::thread::sleep`].
     #[cfg(feature = "std")]
-    pub fn new_with_std_instant<C: Clock<Time = WrappingU64Time>>(
+    pub fn new_with_std_instant<C: Clock<Time = WrappingU64Time<BITS>>>(
         clock: &C,
         min_duration: std::time::Duration,
     ) -> (Self, ClockSynchronization<InstantTime, C::Time>) {
@@ -135,14 +238,14 @@ impl U64Calibration {
     }
 }
 
-impl DurationCalibration<WrappingU64Duration> for U64Calibration {
+impl<const BITS: u32> DurationCalibration<WrappingU64Duration<BITS>> for U64Calibration<BITS> {
     #[inline]
-    fn convert_to_ns(&self, d: WrappingU64Duration) -> u64 {
+    fn convert_to_ns(&self, d: WrappingU64Duration<BITS>) -> u64 {
         apply_mul_shift(d.0, self.to_ns, self.to_ns_shift)
     }
 
     #[inline]
-    fn convert_from_ns(&self, ns: u64) -> WrappingU64Duration {
+    fn convert_from_ns(&self, ns: u64) -> WrappingU64Duration<BITS> {
         WrappingU64Duration(apply_mul_shift(ns, self.from_ns, self.from_ns_shift))
     }
 }

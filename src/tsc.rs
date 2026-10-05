@@ -16,7 +16,7 @@ impl Clock for Tsc {
 
     #[inline(always)]
     fn now(&self) -> WrappingU64Instant {
-        WrappingU64Instant(unsafe { core::arch::x86_64::_rdtsc() })
+        WrappingU64Instant::new(unsafe { core::arch::x86_64::_rdtsc() })
     }
 }
 
