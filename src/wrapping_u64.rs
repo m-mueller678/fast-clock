@@ -160,7 +160,13 @@ impl<const BITS: u32> Time for WrappingU64Time<BITS> {
 
 /// Integer multiply-shift calibration for [`WrappingU64Duration`].
 ///
-/// Converts between raw ticks and nanoseconds using precomputed multiply-shift factors.
+/// Converts between ticks and nanoseconds using precomputed multiply-shift factors.
+/// All involved durations must be less than half the maximum representable value:
+/// Less than 2^63 nanoseconds and less than 2^(BITS-1) ticks.
+///
+/// The covnersion precision is best effort.
+/// No particular precision guarantee is made.
+/// The current implementation produces results with an error of at most 1 result unit (nanosecond or tick).
 #[derive(Clone, Copy, Debug)]
 pub struct U64Calibration<const BITS: u32 = 64> {
     to_ns: u64,
@@ -250,6 +256,7 @@ impl<const BITS: u32> DurationCalibration<WrappingU64Duration<BITS>> for U64Cali
     }
 }
 
+/// Computes `(mul, shift)` such that `apply_mul_shift(x, mul, shift) == round(x * to / from)`.
 fn make_mul_shift(from: u64, to: u64) -> (u64, u32) {
     debug_assert!(from > 0 && from < (1 << 63));
     debug_assert!(to > 0 && to < (1 << 63));
@@ -258,6 +265,7 @@ fn make_mul_shift(from: u64, to: u64) -> (u64, u32) {
     let l_from = 64 - from.leading_zeros();
     let s0 = l_from + 64 - l_to;
 
+    // `shift` is chosen such that mul lands in 2^63..2^64
     let shift = if (to as u128) << s0 < (from as u128) << 64 {
         s0
     } else {
@@ -265,6 +273,7 @@ fn make_mul_shift(from: u64, to: u64) -> (u64, u32) {
     };
 
     let mul = (((to as u128) << shift) / from as u128) as u64;
+    debug_assert!(mul >= 1 << 63);
     (mul, shift)
 }
 
@@ -290,4 +299,50 @@ fn test_make_mul_shift() {
             assert_eq!(apply_mul_shift(from, mul, shift), to);
         }
     }
+}
+
+/// Checks that conversions stay accurate right up to the documented half-period bound,
+/// independent of `BITS`.
+#[test]
+fn test_calibration() {
+    fn exact(x: u64, from: u64, to: u64) -> u128 {
+        (x as u128 * to as u128 + from as u128 / 2) / from as u128
+    }
+
+    fn check<const BITS: u32>(cal_ticks: u64, cal_ns: u64) {
+        if cal_ticks >= 1 << (BITS - 1) || cal_ns >= (1 << 63) {
+            return;
+        }
+        let cal_d = WrappingU64Duration::<BITS>::new(cal_ticks);
+        let c = U64Calibration::<BITS>::new(cal_d, cal_ns);
+        for i in 0..128u64 {
+            let d = WrappingU64Duration::<BITS>::new(cal_ticks / 64 * i);
+            let want = exact(d.to_bits(), cal_d.to_bits(), cal_ns);
+            let got = c.convert_to_ns(d) as u128;
+            assert!(got.abs_diff(want) <= 1, "BITS={BITS} to_ns {got} != {want}");
+        }
+        for i in 0..128u64 {
+            let ns = cal_ns / 64 * i;
+            let want = exact(ns, cal_ns, cal_d.to_bits());
+            if want < 1u128 << 63 {
+                let got = c.convert_from_ns(ns).to_bits() as u128;
+                assert!(
+                    got.abs_diff(want) <= 1,
+                    "BITS={BITS} from_ns {got} != {want}"
+                );
+            }
+        }
+    }
+
+    macro_rules! check_bits {
+        ($($bits:literal),*) => {$({
+            let max = (1u64 << ($bits - 1)) - 1;
+            for ns in [1u64, 112,180,999_999_999, 1 << 62, (1u64 << 63) - 1,max] {
+                for ticks in [1,112,180,max,max/3+1]{
+                    check::<$bits>(ticks, ns);
+                }
+            }
+        })*};
+    }
+    check_bits!(2, 3, 7, 8, 15, 16, 23, 24, 31, 32, 40, 48, 56, 63, 64);
 }
