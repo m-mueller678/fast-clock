@@ -61,6 +61,11 @@ impl<const BITS: u32> Clock for GenericTimer<BITS> {
         }
         WrappingU64Instant::wrapping_new(ticks)
     }
+
+    #[cfg(feature = "std")]
+    fn default_calibrate(&self, _duration: core::time::Duration) -> Self::Calibration {
+        self.calibration_from_cntfrq()
+    }
 }
 
 /// Error returned when the generic timer is not available on the current system.

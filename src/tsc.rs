@@ -18,6 +18,11 @@ impl Clock for Tsc {
     fn now(&self) -> WrappingU64Instant {
         WrappingU64Instant::new(unsafe { core::arch::x86_64::_rdtsc() })
     }
+
+    #[cfg(feature = "std")]
+    fn default_calibrate(&self, duration: core::time::Duration) -> Self::Calibration {
+        U64Calibration::new_with_std_instant(self, duration).0
+    }
 }
 
 /// Error returned when a stable TSC is not available on the current system.

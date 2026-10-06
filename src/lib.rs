@@ -124,6 +124,13 @@ pub trait Clock {
     type Calibration: DurationCalibration<<Self::Time as Time>::Duration>;
     /// Returns the current instant.
     fn now(&self) -> <Self::Time as Time>::Instant;
+    /// Construct a calibration for the clock.
+    ///
+    /// Clocks which need calibration will take roughly `duration` to do so.
+    /// Longer durations will result in more accurate results.
+    /// Some clocks can determine their frequency in other ways and will return quickly regardless of the duration passed.
+    #[cfg(feature = "std")]
+    fn default_calibrate(&self, duration: core::time::Duration) -> Self::Calibration;
 }
 
 /// Converts a clock's native duration type to and from nanoseconds.
