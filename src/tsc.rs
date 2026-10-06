@@ -1,6 +1,6 @@
 use crate::{
     Clock,
-    wrapping_u64::{U64Calibration, WrappingU64Instant, WrappingU64Time},
+    wrapping_u64::{U64Calibration, WrappingU64Instant},
 };
 
 /// The x86_64 timestamp counter (TSC).
@@ -11,7 +11,7 @@ use crate::{
 pub struct Tsc(());
 
 impl Clock for Tsc {
-    type Time = WrappingU64Time;
+    type Instant = WrappingU64Instant;
     type Calibration = U64Calibration;
 
     #[inline(always)]

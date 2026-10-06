@@ -21,7 +21,7 @@ let t0 = tsc.now();
 // ... timed section ...
 let t1 = tsc.now();
 
-let ticks = WrappingU64Time::instant_sub(t1, t0);
+let ticks = t1 - t0;
 let ns: u64 = calibration.convert_to_ns(ticks);
 ```
 
@@ -53,9 +53,9 @@ Its frequency is reported by a register, so no calibration is needed.
 
 ### std::time::Instant / SystemTime
 
-`std_clocks::InstantClock` and `std_clocks::SystemClock` wrap the standard
-library clocks. Their durations are already in nanoseconds, so no calibration is
-needed.
+`std_clocks::InstantClock` and `std_clocks::SystemClock` wrap the standard library clocks.
+Their durations are already in nanoseconds, so no calibration is needed.
+`SystemClock` yields a `std_clocks::SystemInstant`, a thin wrapper that adds a `Sub` implementation.
 
 ## Contributions
 Contributions adding more clocks are welcome.

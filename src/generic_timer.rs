@@ -1,6 +1,6 @@
 use crate::{
     Clock,
-    wrapping_u64::{U64Calibration, WrappingU64Duration, WrappingU64Instant, WrappingU64Time},
+    wrapping_u64::{U64Calibration, WrappingU64Duration, WrappingU64Instant},
 };
 
 /// The aarch64 generic timer virtual counter (`CNTVCT_EL0`).
@@ -50,7 +50,7 @@ use crate::{
 pub struct GenericTimer<const BITS: u32 = 64>(());
 
 impl<const BITS: u32> Clock for GenericTimer<BITS> {
-    type Time = WrappingU64Time<BITS>;
+    type Instant = WrappingU64Instant<BITS>;
     type Calibration = U64Calibration<BITS>;
 
     #[inline(always)]

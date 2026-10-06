@@ -2,13 +2,20 @@
 //!
 //! # Core abstractions
 //!
-//! - [`Time`]: Defines the [`Instant`](Time::Instant) and [`Duration`](Time::Duration) types
-//!   for a clock domain and the arithmetic between them.
-//! - [`Clock`]: Provides [`Clock::now`] and names the associated [`Time`] and
+//! - [`Clock`]: Provides [`Clock::now`] and names the associated [`ClockInstant`] and
 //!   [`DurationCalibration`] types.
+//! - [`ClockInstant`]: A point in time in some clock domain. Names the
+//!   [`Duration`](ClockInstant::Duration) type of that domain.
+//! - [`ClockDuration`]: The span between two instants of one clock domain.
 //! - [`DurationCalibration`]: Converts durations to/from nanoseconds as `u64`.
 //! - [`CalibratedClock`]: Bundles a [`Clock`] with its calibration for convenient passing.
 //! - [`ClockSynchronization`]: Correlates instants between two clock domains.
+//!
+//! Arithmetic is expressed with the [`core::ops`] traits: `instant - instant` yields a duration,
+//! `instant ± duration` yields an instant, and durations add and subtract among themselves.
+//! Durations are unsigned. Operations that would result in a negative duration panic or produce incorrect values.
+//! Instants are unfortunately not [`Ord`], as wrapping clock domains have no total order.
+//! Use [`ClockInstant::compare`] instead.
 //!
 //! # Standard library clocks
 //!
@@ -33,8 +40,7 @@
 //! # {
 //! # use fast_clock::{Clock, DurationCalibration, CalibratedClock, InherentlyCalibrated};
 //! # use fast_clock::tsc::Tsc;
-//! # use fast_clock::wrapping_u64::{U64Calibration, WrappingU64Time};
-//! # use fast_clock::Time;
+//! # use fast_clock::wrapping_u64::U64Calibration;
 //!
 //! let tsc = Tsc::try_new_assume_stable().unwrap();
 //! let (calibration, sync) = U64Calibration::new_with_std_instant(
@@ -47,7 +53,7 @@
 //! // ... timed section ...
 //! let t1 = clock.clock.now();
 //!
-//! let duration = WrappingU64Time::instant_sub(t1, t0);
+//! let duration = t1 - t0;
 //! let duration_ns: u64 = clock.calibration.convert_to_ns(duration);
 //!
 //! // Convert a TSC instant to std::time::Instant using the synchronization point.
@@ -84,7 +90,8 @@
 extern crate std;
 
 mod clock_synchronization;
-use core::cmp::{self};
+use core::cmp::Ordering;
+use core::ops::{Add, Sub};
 
 pub use clock_synchronization::ClockSynchronization;
 
@@ -96,38 +103,44 @@ pub mod std_clocks;
 pub mod tsc;
 pub mod wrapping_u64;
 
-/// Arithmetic types and operations for a clock domain.
+/// A non-negative span of time in a clock domain.
 ///
-/// Most users will use the provided implementations: [`std_clocks::InstantTime`],
-/// [`std_clocks::SystemTimeTime`], and [`wrapping_u64::WrappingU64Time`].
-pub trait Time {
-    type Instant: Copy;
-    type Duration: Copy;
-    /// Returns `a - b`. Behavior when `a < b` is unspecified: implementations may
-    /// panic or return a meaningless value. Use [`instant_cmp`](Self::instant_cmp) to
-    /// check ordering first if unsure.
-    fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration;
-    /// Returns `a - b`. Behavior when `a < b` is unspecified: implementations may
-    /// panic or return a meaningless value.
-    fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration;
-    fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration;
-    fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant;
-    fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant;
-    fn instant_cmp(a: Self::Instant, b: Self::Instant) -> cmp::Ordering;
+/// Most users will use the provided implementations: [`std::time::Duration`] and
+/// [`wrapping_u64::WrappingU64Duration`].
+pub trait ClockDuration: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> {}
+
+/// A point in time in a clock domain.
+///
+/// Most users will use the provided implementations: [`std::time::Instant`],
+/// [`std_clocks::SystemInstant`], and [`wrapping_u64::WrappingU64Instant`].
+pub trait ClockInstant:
+    Copy
+    + Sub<Self, Output = Self::Duration>
+    + Add<Self::Duration, Output = Self>
+    + Sub<Self::Duration, Output = Self>
+{
+    /// The duration type of this instant's clock domain.
+    type Duration: ClockDuration;
+
+    /// Compares two instants chronologically.
+    ///
+    /// In a wrapping clock domain this is only meaningful for instants that are less than
+    /// half a rollover period apart.
+    fn compare(self, other: Self) -> Ordering;
 }
 
 /// A source of time readings.
 ///
 /// Call [`Clock::now`] to sample an instant.
 pub trait Clock {
-    type Time: Time;
-    type Calibration: DurationCalibration<<Self::Time as Time>::Duration>;
+    type Instant: ClockInstant;
+    type Calibration: DurationCalibration<<Self::Instant as ClockInstant>::Duration>;
     /// Returns the current instant.
-    fn now(&self) -> <Self::Time as Time>::Instant;
+    fn now(&self) -> Self::Instant;
 }
 
 /// Converts a clock's native duration type to and from nanoseconds.
-pub trait DurationCalibration<D> {
+pub trait DurationCalibration<D: ClockDuration> {
     /// Converts a duration to nanoseconds, rounding to the nearest nanosecond.
     fn convert_to_ns(&self, d: D) -> u64;
     /// Converts a nanosecond value to this clock's native duration type.
@@ -181,7 +194,7 @@ macro_rules! declare_fast_clock {
         ///
         /// This allows code using the clock to be portable.
         /// Note that the associated types of the clock may vary between architectures.
-        /// See [`FastClockCalibration`] and [`FastClockTime`].
+        /// See [`FastClockCalibration`], [`FastClockInstant`] and [`FastClockDuration`].
         /// It is architecture dependent whether the clock is the same across all threads.
         ///
         /// It is currently implemented only for `x86_64` ([`Tsc`](tsc::Tsc)) and `aarch64` ([`GenericTimer`](generic_timer::GenericTimer)).
@@ -192,8 +205,10 @@ macro_rules! declare_fast_clock {
         pub type FastClock = $T;
         /// The [`DurationCalibration`] of [`FastClock`].
         pub type FastClockCalibration = <FastClock as Clock>::Calibration;
-        /// The [`Time`] of [`FastClock`].
-        pub type FastClockTime = <FastClock as Clock>::Time;
+        /// The [`ClockInstant`] of [`FastClock`].
+        pub type FastClockInstant = <FastClock as Clock>::Instant;
+        /// The [`ClockDuration`] of [`FastClock`].
+        pub type FastClockDuration = <FastClockInstant as ClockInstant>::Duration;
     };
 }
 

@@ -1,103 +1,88 @@
-use crate::{Clock, DurationCalibration, InherentlyCalibrated, Time};
+use crate::{Clock, DurationCalibration, InherentlyCalibrated};
 use core::cmp::Ordering;
+use core::ops::{Add, Sub};
 use std::time::{Duration, Instant, SystemTime};
 
-/// [`Time`] implementation for [`std::time::Instant`].
-///
-/// [`instant_sub`](Time::instant_sub) panics if `a < b` because [`Duration`] cannot
-/// represent negative values. Use [`Time::instant_cmp`] to compare instants.
-pub struct InstantTime;
-impl Time for InstantTime {
-    type Instant = std::time::Instant;
+impl crate::ClockDuration for Duration {}
 
+impl crate::ClockInstant for Instant {
     type Duration = Duration;
 
     #[inline]
-    fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        a.checked_duration_since(b)
-            .expect("instant_sub: a is earlier than b; Duration cannot represent negative values")
-    }
-
-    #[inline]
-    fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        a - b
-    }
-
-    #[inline]
-    fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        a + b
-    }
-
-    #[inline]
-    fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        a - b
-    }
-
-    #[inline]
-    fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        a + b
-    }
-
-    #[inline]
-    fn instant_cmp(a: Self::Instant, b: Self::Instant) -> Ordering {
-        a.cmp(&b)
+    fn compare(self, other: Self) -> Ordering {
+        self.cmp(&other)
     }
 }
 
-/// [`Time`] implementation for [`std::time::SystemTime`].
+/// A [`std::time::SystemTime`] that is a [`ClockInstant`](crate::ClockInstant).
 ///
-/// [`instant_sub`](Time::instant_sub) panics if `a < b` because [`Duration`] cannot
-/// represent negative values. Use [`Time::instant_cmp`] to compare instants.
-pub struct SystemTimeTime;
+/// [`SystemTime`] itself does not implement the required [`Sub<SystemTime>`].
+/// This wrapper panics on negative results, matching [`std::time::Instant`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct SystemInstant(pub SystemTime);
 
-impl Time for SystemTimeTime {
-    type Instant = SystemTime;
+impl From<SystemTime> for SystemInstant {
+    fn from(t: SystemTime) -> Self {
+        SystemInstant(t)
+    }
+}
+
+impl From<SystemInstant> for SystemTime {
+    fn from(t: SystemInstant) -> Self {
+        t.0
+    }
+}
+
+impl crate::ClockInstant for SystemInstant {
     type Duration = Duration;
 
     #[inline]
-    fn instant_sub(a: SystemTime, b: SystemTime) -> Duration {
-        a.duration_since(b)
-            .expect("instant_sub: a is earlier than b; Duration cannot represent negative values")
+    fn compare(self, other: Self) -> Ordering {
+        self.cmp(&other)
     }
+}
+
+impl Sub<SystemInstant> for SystemInstant {
+    type Output = Duration;
 
     #[inline]
-    fn duration_sub(a: Duration, b: Duration) -> Duration {
-        a - b
+    fn sub(self, rhs: Self) -> Duration {
+        self.0
+            .duration_since(rhs.0)
+            .expect("sub: self is earlier than rhs; Duration cannot represent negative values")
     }
+}
+
+impl Add<Duration> for SystemInstant {
+    type Output = Self;
 
     #[inline]
-    fn duration_add(a: Duration, b: Duration) -> Duration {
-        a + b
+    fn add(self, rhs: Duration) -> Self {
+        SystemInstant(self.0 + rhs)
     }
+}
+
+impl Sub<Duration> for SystemInstant {
+    type Output = Self;
 
     #[inline]
-    fn mixed_sub(a: SystemTime, b: Duration) -> SystemTime {
-        a - b
-    }
-
-    #[inline]
-    fn mixed_add(a: SystemTime, b: Duration) -> SystemTime {
-        a + b
-    }
-
-    #[inline]
-    fn instant_cmp(a: Self::Instant, b: Self::Instant) -> Ordering {
-        a.cmp(&b)
+    fn sub(self, rhs: Duration) -> Self {
+        SystemInstant(self.0 - rhs)
     }
 }
 
 macro_rules! std_clock {
-    ($(#[$meta:meta])* $Instant:ty, $Clock:ident, $TimeType:ty) => {
+    ($(#[$meta:meta])* $Instant:ty, $Clock:ident, $now:expr) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug)]
         pub struct $Clock;
 
         impl Clock for $Clock {
-            type Time = $TimeType;
+            type Instant = $Instant;
             type Calibration = InherentlyCalibrated;
 
             fn now(&self) -> $Instant {
-                <$Instant>::now()
+                $now
             }
         }
     };
@@ -105,11 +90,11 @@ macro_rules! std_clock {
 
 std_clock!(
     /// A [`Clock`] that reads [`std::time::Instant::now`].
-    Instant, InstantClock, InstantTime
+    Instant, InstantClock, Instant::now()
 );
 std_clock!(
     /// A [`Clock`] that reads [`std::time::SystemTime::now`].
-    SystemTime, SystemClock, SystemTimeTime
+    SystemInstant, SystemClock, SystemInstant(SystemTime::now())
 );
 
 impl DurationCalibration<Duration> for InherentlyCalibrated {

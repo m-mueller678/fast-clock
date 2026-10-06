@@ -1,20 +1,19 @@
-#[cfg(feature = "std")]
-use crate::std_clocks::InstantTime;
-use crate::{CalibratedClock, Clock, ClockSynchronization, DurationCalibration, Time};
-use core::cmp::{self};
+use crate::{
+    CalibratedClock, Clock, ClockDuration, ClockInstant, ClockSynchronization, DurationCalibration,
+};
+use core::cmp::Ordering;
+use core::ops::{Add, Sub};
 
-/// [`Time`] implementation for clocks that produce raw `u64` tick values and wrap around at `2^BITS`.
+/// A [`ClockInstant`] for clocks that produce raw `u64` tick values and wrap
+/// around at `2^BITS`.
 ///
-/// All arithmetic uses wrapping semantics so measurements across a counter rollover
-/// remain accurate, provided the involved timestamps are less than `2^(BITS-1)` ticks apart.
-#[derive(Copy, Clone, Debug)]
-pub struct WrappingU64Time<const BITS: u32 = 64>;
-
-/// An instant in a [`WrappingU64Time`] domain.
+/// All arithmetic involving instants uses wrapping semantics so measurements across a counter
+/// rollover remain accurate, provided the involved instants are less than `2^(BITS-1)` ticks
+/// apart.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WrappingU64Instant<const BITS: u32 = 64>(u64);
 
-/// A non-negative duration in a [`WrappingU64Time`] domain.
+/// A non-negative duration between two [`WrappingU64Instant`]s.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct WrappingU64Duration<const BITS: u32 = 64>(u64);
 
@@ -121,40 +120,60 @@ impl<const BITS: u32> WrappingU64Duration<BITS> {
     const UNUSED_BITS: u32 = 64 - BITS;
 }
 
-impl<const BITS: u32> Time for WrappingU64Time<BITS> {
-    type Instant = WrappingU64Instant<BITS>;
-
+impl<const BITS: u32> ClockInstant for WrappingU64Instant<BITS> {
     type Duration = WrappingU64Duration<BITS>;
 
     #[inline]
-    fn instant_sub(a: Self::Instant, b: Self::Instant) -> Self::Duration {
-        debug_assert!(Self::instant_cmp(a, b).is_ge());
-        WrappingU64Duration(a.0.wrapping_sub(b.0))
+    fn compare(self, other: Self) -> Ordering {
+        (self.0 as i64).wrapping_sub(other.0 as i64).cmp(&0)
     }
+}
+
+impl<const BITS: u32> Sub<WrappingU64Instant<BITS>> for WrappingU64Instant<BITS> {
+    type Output = WrappingU64Duration<BITS>;
 
     #[inline]
-    fn duration_sub(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingU64Duration(a.0 - b.0)
+    fn sub(self, rhs: Self) -> WrappingU64Duration<BITS> {
+        debug_assert!(ClockInstant::compare(self, rhs).is_ge());
+        WrappingU64Duration(self.0.wrapping_sub(rhs.0))
     }
+}
+
+impl<const BITS: u32> Add<WrappingU64Duration<BITS>> for WrappingU64Instant<BITS> {
+    type Output = Self;
 
     #[inline]
-    fn duration_add(a: Self::Duration, b: Self::Duration) -> Self::Duration {
-        WrappingU64Duration(a.0 + b.0)
+    fn add(self, rhs: WrappingU64Duration<BITS>) -> Self {
+        WrappingU64Instant(self.0.wrapping_add(rhs.0))
     }
+}
+
+impl<const BITS: u32> Sub<WrappingU64Duration<BITS>> for WrappingU64Instant<BITS> {
+    type Output = Self;
 
     #[inline]
-    fn mixed_sub(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingU64Instant(a.0.wrapping_sub(b.0))
+    fn sub(self, rhs: WrappingU64Duration<BITS>) -> Self {
+        WrappingU64Instant(self.0.wrapping_sub(rhs.0))
     }
+}
+
+impl<const BITS: u32> ClockDuration for WrappingU64Duration<BITS> {}
+
+impl<const BITS: u32> Add for WrappingU64Duration<BITS> {
+    type Output = Self;
 
     #[inline]
-    fn mixed_add(a: Self::Instant, b: Self::Duration) -> Self::Instant {
-        WrappingU64Instant(a.0.wrapping_add(b.0))
+    fn add(self, rhs: Self) -> Self {
+        WrappingU64Duration(self.0 + rhs.0)
     }
+}
+
+impl<const BITS: u32> Sub for WrappingU64Duration<BITS> {
+    type Output = Self;
 
     #[inline]
-    fn instant_cmp(a: Self::Instant, b: Self::Instant) -> cmp::Ordering {
-        (a.0 as i64).wrapping_sub(b.0 as i64).cmp(&0)
+    fn sub(self, rhs: Self) -> Self {
+        WrappingU64Duration(self.0 - rhs.0)
     }
 }
 
@@ -194,24 +213,24 @@ impl<const BITS: u32> U64Calibration<BITS> {
     ///
     /// Returns the calibration and a [`ClockSynchronization`] relating the two clocks to each other
     /// `wait` is invoked with the instant until which it should wait.
-    pub fn new_with_reference_clock<C: Clock<Time = WrappingU64Time<BITS>>, R: Clock>(
+    pub fn new_with_reference_clock<C: Clock<Instant = WrappingU64Instant<BITS>>, R: Clock>(
         clock: &C,
         reference_clock: &CalibratedClock<R>,
-        min_duration: <R::Time as Time>::Duration,
-        mut wait: impl FnMut(<R::Time as Time>::Instant),
-    ) -> (Self, ClockSynchronization<R::Time, C::Time>) {
+        min_duration: <R::Instant as ClockInstant>::Duration,
+        mut wait: impl FnMut(R::Instant),
+    ) -> (Self, ClockSynchronization<R::Instant, C::Instant>) {
         let s1 = ClockSynchronization::new_aba_calibrated(reference_clock, clock);
-        let wait_until = R::Time::mixed_add(s1.epoch_a(), min_duration);
-        while R::Time::instant_cmp(reference_clock.clock.now(), wait_until).is_lt() {
+        let wait_until = s1.epoch_a() + min_duration;
+        while reference_clock.clock.now().compare(wait_until).is_lt() {
             wait(wait_until);
         }
         let s2 = ClockSynchronization::new_aba_calibrated(reference_clock, clock);
         (
             Self::new(
-                C::Time::instant_sub(s2.epoch_b(), s1.epoch_b()),
+                s2.epoch_b() - s1.epoch_b(),
                 reference_clock
                     .calibration
-                    .convert_to_ns(R::Time::instant_sub(s2.epoch_a(), s1.epoch_a())),
+                    .convert_to_ns(s2.epoch_a() - s1.epoch_a()),
             ),
             s2,
         )
@@ -221,10 +240,10 @@ impl<const BITS: u32> U64Calibration<BITS> {
     ///
     /// This is a convenience wrapper around [`U64Calibration::new_with_reference_clock`] based on [`std::time::Instant`] and [`std::thread::sleep`].
     #[cfg(feature = "std")]
-    pub fn new_with_std_instant<C: Clock<Time = WrappingU64Time<BITS>>>(
+    pub fn new_with_std_instant<C: Clock<Instant = WrappingU64Instant<BITS>>>(
         clock: &C,
         min_duration: std::time::Duration,
-    ) -> (Self, ClockSynchronization<InstantTime, C::Time>) {
+    ) -> (Self, ClockSynchronization<std::time::Instant, C::Instant>) {
         use crate::{InherentlyCalibrated, std_clocks::InstantClock};
 
         Self::new_with_reference_clock(
