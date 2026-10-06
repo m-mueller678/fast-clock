@@ -10,9 +10,13 @@ readme = "readme.md"
 categories = ["development-tools::profiling","hardware-support","no-std::no-alloc"]
 keywords = ["timing","clock","tsc","nanosecond-timing"]
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+
 [dependencies]
 
 [features]
-default = ["tsc","std"]
+default = ["tsc","generic_timer","std"]
 tsc=[]
+generic_timer=[]
 std=[]

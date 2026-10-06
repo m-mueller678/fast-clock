@@ -18,10 +18,15 @@
 //!
 //! # Hardware clocks
 //!
-//! [`tsc::Tsc`] reads the x86_64 timestamp counter. Its ticks are not nanoseconds,
+//! These are gated on their target architecture, so only the matching one is present.
+//!
+//! `tsc::Tsc` reads the x86_64 timestamp counter. Its ticks are not nanoseconds,
 //! so calibration via [`wrapping_u64::U64Calibration`] is required. Calibration also
 //! produces a [`ClockSynchronization`] that can convert TSC instants to
 //! `std::time::Instant` and vice versa.
+//!
+//! `generic_timer::GenericTimer` is the aarch64 counterpart. It can be calibrated the same
+//! way, or without a measurement from the frequency the hardware reports.
 //!
 //! ```
 //! # #[cfg(all(feature = "tsc", target_arch = "x86_64"))]
@@ -55,7 +60,8 @@
 //! | Feature | Default | Description |
 //! |---------|---------|-------------|
 //! | `std`   | yes     | Enables [`std_clocks`] and `std`-dependent methods. |
-//! | `tsc`   | yes     | Enables [`tsc`] (x86_64 only). |
+//! | `tsc`   | yes     | Enables `tsc` (x86_64 only). |
+//! | `generic_timer` | yes | Enables `generic_timer` (aarch64 only). |
 //!
 //! Contributions adding more clocks are welcome.
 
@@ -69,6 +75,8 @@ use core::cmp::{self};
 
 pub use clock_synchronization::ClockSynchronization;
 
+#[cfg(all(feature = "generic_timer", target_arch = "aarch64"))]
+pub mod generic_timer;
 #[cfg(feature = "std")]
 pub mod std_clocks;
 #[cfg(all(feature = "tsc", target_arch = "x86_64"))]

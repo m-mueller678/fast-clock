@@ -33,6 +33,13 @@ let ticks = WrappingU64Time::instant_sub(t1, t0);
 let ns: u64 = calibration.convert_to_ns(ticks);
 ```
 
+### Generic timer (aarch64)
+
+The aarch64 generic timer can be read with a single instruction.
+Its frequency is reported by a register, so no calibration is needed.
+
+TODO example
+
 ### Converting between clock domains
 
 The `sync` value returned by the calibration in the previous example is a `ClockSynchronization` that maps
