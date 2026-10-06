@@ -99,10 +99,6 @@ macro_rules! std_clock {
             fn now(&self) -> $Instant {
                 <$Instant>::now()
             }
-
-            fn default_calibrate(&self,_duration:std::time::Duration)->Self::Calibration{
-                InherentlyCalibrated
-            }
         }
     };
 }
