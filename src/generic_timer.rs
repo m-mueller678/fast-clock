@@ -10,18 +10,18 @@ use crate::{
 /// Access to this counter may be disabled by the kernel.
 /// It is almost always available on Linux.
 ///
-/// # Frequency
+/// ### Frequency
 /// The frequency of the counter can be read from `CNTFRQ_EL0`, so it does not need calibration.
 /// This value is typically populated by firmware.
 ///
 /// From Armv8.6 and Armv9.1 on, the frequency must be exactly 1GHz.
 /// Before those, the counter frequency was typically between 1MHz and 50MHz.
-/// The clock frequency is represented in 32-bits, which means the frequency will be at most `u32::MAX` Hz ≈ 4.3GHz.
+/// The clock frequency is represented in 32-bits, which means the frequency will be at most [`u32::MAX`] Hz ≈ 4.3GHz.
 ///
 /// Note that even on newer systems the resolution may be lower than 1GHz.
 /// For example, the counter may atomically increase by 40 every 40ns.
 ///
-/// # Bit Size
+/// ### Bit Size
 /// The hardware counter has 56-64 bits (implementation dependent).
 /// From Armv8.6 and Armv9.1 on, the counter must be 64 bits.
 /// `BITS` is the counter width assumed by this clock and must be in `56..=64`.
@@ -80,7 +80,7 @@ impl std::error::Error for GenericTimerUnavailable {}
 impl<const BITS: u32> GenericTimer<BITS> {
     const CHECK_BITS: () = assert!(BITS >= 56 && BITS <= 64, "BITS must be in 56..=64");
 
-    /// Returns a `GenericTimer`, assuming `CNTVCT_EL0` is readable from EL0.
+    /// Returns a [`GenericTimer`], assuming `CNTVCT_EL0` is readable from EL0.
     ///
     /// Operating systems that expose a userspace clock without a syscall enable this, which
     /// covers Linux and macOS. If it is disabled, [`Clock::now`] traps with `SIGILL`. There is no
@@ -90,7 +90,7 @@ impl<const BITS: u32> GenericTimer<BITS> {
         GenericTimer(())
     }
 
-    /// Returns `Ok(GenericTimer)` if the Linux kernel reports `arch_sys_counter` as an available clocksource.
+    /// Returns `Ok(`[`GenericTimer`]`)` if the Linux kernel reports `arch_sys_counter` as an available clocksource.
     #[cfg(all(target_os = "linux", feature = "std"))]
     pub fn try_new_linux_sys() -> Result<Self, GenericTimerUnavailable> {
         const { Self::CHECK_BITS };
@@ -106,8 +106,6 @@ impl<const BITS: u32> GenericTimer<BITS> {
     }
 
     /// Returns the counter frequency in Hz as reported by `CNTFRQ_EL0`.
-    ///
-    /// This is the raw hardware value, independent of `BITS`.
     pub fn read_cntfrq(&self) -> u32 {
         let frequency: u32;
         unsafe {

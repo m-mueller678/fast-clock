@@ -35,7 +35,7 @@ impl core::fmt::Display for TscUnavailable {
 impl std::error::Error for TscUnavailable {}
 
 impl Tsc {
-    /// Returns `Ok(Tsc)` if the CPUID TSC flag is set.
+    /// Returns `Ok(Self)` if the CPUID TSC flag is set.
     ///
     /// The TSC flag indicates the counter exists but does not guarantee stability
     /// across cores or CPU power states. Prefer [`Tsc::try_new_linux_sys`] on Linux.
@@ -48,7 +48,7 @@ impl Tsc {
         }
     }
 
-    /// Returns `Ok(Tsc)` if the Linux kernel reports `tsc` as an available clocksource.
+    /// Returns `Ok(Self)` if the Linux kernel reports `tsc` as an available clocksource.
     ///
     /// A TSC listed as an available clocksource means the kernel has verified stability
     /// across cores and power state changes, making it safe for benchmarking.

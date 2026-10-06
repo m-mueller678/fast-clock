@@ -2,8 +2,8 @@
 //!
 //! # Core abstractions
 //!
-//! - [`Time`]: Defines the `Instant` and `Duration` types for a clock domain and
-//!   the arithmetic between them.
+//! - [`Time`]: Defines the [`Instant`](Time::Instant) and [`Duration`](Time::Duration) types
+//!   for a clock domain and the arithmetic between them.
 //! - [`Clock`]: Provides [`Clock::now`] and names the associated [`Time`] and
 //!   [`DurationCalibration`] types.
 //! - [`DurationCalibration`]: Converts durations to/from nanoseconds as `u64`.
@@ -13,19 +13,19 @@
 //! # Standard library clocks
 //!
 //! [`std_clocks::InstantClock`] and [`std_clocks::SystemClock`] wrap
-//! `std::time::Instant` and `std::time::SystemTime`. They use [`InherentlyCalibrated`],
+//! [`std::time::Instant`] and [`std::time::SystemTime`]. They use [`InherentlyCalibrated`],
 //! as their duration type is directly convertible to/from nanoseconds.
 //!
 //! # Hardware clocks
 //!
 //! These are gated on their target architecture, so only the matching one is present.
 //!
-//! `tsc::Tsc` reads the x86_64 timestamp counter. Its ticks are not nanoseconds,
+//! [`tsc::Tsc`] reads the x86_64 timestamp counter. Its ticks are not nanoseconds,
 //! so calibration via [`wrapping_u64::U64Calibration`] is required. Calibration also
 //! produces a [`ClockSynchronization`] that can convert TSC instants to
-//! `std::time::Instant` and vice versa.
+//! [`std::time::Instant`] and vice versa.
 //!
-//! `generic_timer::GenericTimer` is the aarch64 counterpart. It can be calibrated the same
+//! [`generic_timer::GenericTimer`] is the aarch64 counterpart. It can be calibrated the same
 //! way, or without a measurement from the frequency the hardware reports.
 //!
 //! ```
@@ -57,24 +57,24 @@
 //!
 //! # Fast clock
 //!
-//! `FastClock` is a type alias for a fast default clock for the target architecture.
+//! [`FastClock`] is a type alias for a fast default clock for the target architecture.
 //! This allows code using the clock to be portable.
 //! Note that the associated types of the clock may vary between architectures.
 //!
 //! It is currently implemented only for `x86_64` and `aarch64`.
 //! Both have very similar initialization options and are zero sized.
-//! On aarch64 the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<64>`.
-//! See `generic_timer::GenericTimer` for the tradeoffs involved.
+//! On aarch64 the `fast-clock-aarch64-56bit` feature selects [`GenericTimer<56>`](generic_timer::GenericTimer) instead of [`GenericTimer<64>`](generic_timer::GenericTimer).
+//! See [`generic_timer::GenericTimer`] for the tradeoffs involved.
 //!
 //! # Features
 //!
 //! | Feature | Default | Description |
 //! |---------|---------|-------------|
 //! | `std`   | yes     | Enables [`std_clocks`] and `std`-dependent methods. |
-//! | `x86_64-tsc` | yes | Enables `tsc` (x86_64 only). |
-//! | `aarch64-generic-timer` | yes | Enables `generic_timer` (aarch64 only). |
-//! | `fast-clock` | yes | Enables `FastClock`. Implies the hardware clock features above. |
-//! | `fast-clock-aarch64-56bit` | no | Makes `FastClock` use a 56 bit counter on aarch64. Implies `fast-clock`. |
+//! | `x86_64-tsc` | yes | Enables [`tsc`] (x86_64 only). |
+//! | `aarch64-generic-timer` | yes | Enables [`generic_timer`] (aarch64 only). |
+//! | `fast-clock` | yes | Enables [`FastClock`]. Implies the hardware clock features above. |
+//! | `fast-clock-aarch64-56bit` | no | Makes [`FastClock`] use a 56 bit counter on aarch64. Implies `fast-clock`. |
 //!
 //! Contributions adding more clocks are welcome.
 
@@ -88,11 +88,11 @@ use core::cmp::{self};
 
 pub use clock_synchronization::ClockSynchronization;
 
-#[cfg(all(feature = "aarch64-generic-timer", target_arch = "aarch64"))]
+#[cfg(all(feature = "aarch64-generic-timer", any(target_arch = "aarch64", doc)))]
 pub mod generic_timer;
 #[cfg(feature = "std")]
 pub mod std_clocks;
-#[cfg(all(feature = "x86_64-tsc", target_arch = "x86_64"))]
+#[cfg(all(feature = "x86_64-tsc", any(target_arch = "x86_64", doc)))]
 pub mod tsc;
 pub mod wrapping_u64;
 
@@ -156,7 +156,7 @@ pub struct CalibratedClock<C: Clock> {
 }
 
 impl<C: Clock<Calibration = InherentlyCalibrated>> CalibratedClock<C> {
-    /// Construct a `CalibratedClock` for a [Clock] that is inherently calibrated.
+    /// Construct a [`CalibratedClock`] for a [`Clock`] that is inherently calibrated.
     pub fn inherent(clock: C) -> Self {
         CalibratedClock {
             clock,
@@ -184,10 +184,10 @@ macro_rules! declare_fast_clock {
         /// See [`FastClockCalibration`] and [`FastClockTime`].
         /// It is architecture dependent whether the clock is the same across all threads.
         ///
-        /// It is currently implemented only for `x86_64` (`tsc::Tsc`) and `aarch64` (`generic_timer::GenericTimer`).
+        /// It is currently implemented only for `x86_64` ([`Tsc`](tsc::Tsc)) and `aarch64` ([`GenericTimer`](generic_timer::GenericTimer)).
         /// Both have very similar initialization options and are zero sized.
-        /// On `aarch64` the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<64>`.
-        /// See `generic_timer::GenericTimer` for the tradeoffs involved.
+        /// On `aarch64` the `fast-clock-aarch64-56bit` feature selects [`GenericTimer<56>`](generic_timer::GenericTimer) instead of [`GenericTimer<64>`](generic_timer::GenericTimer).
+        /// See [`GenericTimer`](generic_timer::GenericTimer) for the tradeoffs involved.
         /// On other architectures, the type alias is absent.
         pub type FastClock = $T;
         /// The [`DurationCalibration`] of [`FastClock`].
