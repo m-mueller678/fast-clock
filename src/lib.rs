@@ -107,7 +107,13 @@ pub mod wrapping_u64;
 ///
 /// Most users will use the provided implementations: [`std::time::Duration`] and
 /// [`wrapping_u64::WrappingU64Duration`].
-pub trait ClockDuration: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> {}
+pub trait ClockDuration: Copy + Ord + Add<Self, Output = Self> + Sub<Self, Output = Self> {
+    /// Returns `self - rhs`, or a zero duration if `rhs` is longer than `self`.
+    #[allow(clippy::eq_op)]
+    fn saturating_sub(self, rhs: Self) -> Self {
+        if self > rhs { self - rhs } else { self - self }
+    }
+}
 
 /// A point in time in a clock domain.
 ///

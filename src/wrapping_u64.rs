@@ -157,7 +157,12 @@ impl<const BITS: u32> Sub<WrappingU64Duration<BITS>> for WrappingU64Instant<BITS
     }
 }
 
-impl<const BITS: u32> ClockDuration for WrappingU64Duration<BITS> {}
+impl<const BITS: u32> ClockDuration for WrappingU64Duration<BITS> {
+    #[inline]
+    fn saturating_sub(self, rhs: Self) -> Self {
+        WrappingU64Duration(self.0.saturating_sub(rhs.0))
+    }
+}
 
 impl<const BITS: u32> Add for WrappingU64Duration<BITS> {
     type Output = Self;
@@ -364,4 +369,17 @@ fn test_calibration() {
         })*};
     }
     check_bits!(2, 3, 7, 8, 15, 16, 23, 24, 31, 32, 40, 48, 56, 63, 64);
+}
+
+#[test]
+fn test_saturating_sub() {
+    fn d<const BITS: u32>(x: u64) -> WrappingU64Duration<BITS> {
+        WrappingU64Duration::new(x)
+    }
+    assert_eq!(d::<64>(10).saturating_sub(d(4)), d(6));
+    assert_eq!(d::<64>(4).saturating_sub(d(4)), d(0));
+    assert_eq!(d::<64>(4).saturating_sub(d(10)), d(0));
+    // `BITS<64` keeps the unused low bits out of the comparison
+    assert_eq!(d::<8>(200).saturating_sub(d(55)), d(145));
+    assert_eq!(d::<8>(55).saturating_sub(d(200)), d(0));
 }

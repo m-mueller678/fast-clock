@@ -3,7 +3,12 @@ use core::cmp::Ordering;
 use core::ops::{Add, Sub};
 use std::time::{Duration, Instant, SystemTime};
 
-impl crate::ClockDuration for Duration {}
+impl crate::ClockDuration for Duration {
+    #[inline]
+    fn saturating_sub(self, rhs: Self) -> Self {
+        Duration::saturating_sub(self, rhs)
+    }
+}
 
 impl crate::ClockInstant for Instant {
     type Duration = Duration;
