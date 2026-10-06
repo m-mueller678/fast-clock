@@ -55,16 +55,16 @@
 //! # }
 //! ```
 //!
-//! # [`FastClock`]
+//! # Fast clock
 //!
-//! [`FastClock`] is a type alias for a fast default clock for the target architecture.
+//! `FastClock` is a type alias for a fast default clock for the target architecture.
 //! This allows code using the clock to be portable.
-//! Note that the associated types of the clock mat vary between architectures.
+//! Note that the associated types of the clock may vary between architectures.
 //!
-//! It is currenrly implemented only for `x86_64` and `aarch64`.
+//! It is currently implemented only for `x86_64` and `aarch64`.
 //! Both have very similar initialization options and are zero sized.
-//! On aarch64 the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<56>`.
-//! See [`GenericTimer`](generic_timer::GenericTimer) for the tradeoffs involved.
+//! On aarch64 the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<64>`.
+//! See `generic_timer::GenericTimer` for the tradeoffs involved.
 //!
 //! # Features
 //!
@@ -73,7 +73,7 @@
 //! | `std`   | yes     | Enables [`std_clocks`] and `std`-dependent methods. |
 //! | `x86_64-tsc` | yes | Enables `tsc` (x86_64 only). |
 //! | `aarch64-generic-timer` | yes | Enables `generic_timer` (aarch64 only). |
-//! | `fast-clock` | no | Enables `FastClock`. Implies the hardware clock features above. |
+//! | `fast-clock` | yes | Enables `FastClock`. Implies the hardware clock features above. |
 //! | `fast-clock-aarch64-56bit` | no | Makes `FastClock` use a 56 bit counter on aarch64. Implies `fast-clock`. |
 //!
 //! Contributions adding more clocks are welcome.
@@ -180,20 +180,20 @@ macro_rules! declare_fast_clock {
         /// A type alias for a fast default clock for the target architecture.
         ///
         /// This allows code using the clock to be portable.
-        /// Note that the associated types of the clock mat vary between architectures.
-        /// See [`FastClockCalibration`] and [`FastTime`].
+        /// Note that the associated types of the clock may vary between architectures.
+        /// See [`FastClockCalibration`] and [`FastClockTime`].
         /// It is architecture dependent whether the clock is the same across all threads.
         ///
-        /// It is currenrly implemented only for `x86_64` ([`Tsc`](tsc::Tsc)) and `aarch64` ([`GenericTimer`](generic_timer::GenericTimer)).
+        /// It is currently implemented only for `x86_64` (`tsc::Tsc`) and `aarch64` (`generic_timer::GenericTimer`).
         /// Both have very similar initialization options and are zero sized.
-        /// On `aarch64` the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<56>`.
-        /// See [`GenericTimer`](generic_timer::GenericTimer) for the tradeoffs involved.
+        /// On `aarch64` the `fast-clock-aarch64-56bit` feature selects `generic_timer::GenericTimer<56>` instead of `generic_timer::GenericTimer<64>`.
+        /// See `generic_timer::GenericTimer` for the tradeoffs involved.
         /// On other architectures, the type alias is absent.
         pub type FastClock = $T;
         /// The [`DurationCalibration`] of [`FastClock`].
         pub type FastClockCalibration = <FastClock as Clock>::Calibration;
         /// The [`Time`] of [`FastClock`].
-        pub type FastTime = <FastClock as Clock>::Time;
+        pub type FastClockTime = <FastClock as Clock>::Time;
     };
 }
 
@@ -204,7 +204,11 @@ macro_rules! declare_fast_clock {
 ))]
 declare_fast_clock!(generic_timer::GenericTimer<64>);
 
-#[cfg(all(target_arch = "aarch64", feature = "fast-clock-aarch64-56bit"))]
+#[cfg(all(
+    feature = "fast-clock",
+    target_arch = "aarch64",
+    feature = "fast-clock-aarch64-56bit"
+))]
 declare_fast_clock!(generic_timer::GenericTimer<56>);
 
 #[cfg(all(feature = "fast-clock", target_arch = "x86_64"))]
