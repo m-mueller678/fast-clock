@@ -47,7 +47,7 @@ impl<const BITS: u32> WrappingU64Instant<BITS> {
 
     /// Convert to a tick count in the range `0..2^BITS`.
     ///
-    /// If `BITS<64`, this type may use additional bits for extra precission.
+    /// If `BITS<64`, this type may use additional bits for extra precision.
     /// The rounding behaviour of `to_ticks` is unspecified.
     #[inline]
     pub fn to_ticks(self) -> u64 {
@@ -94,7 +94,7 @@ impl<const BITS: u32> WrappingU64Duration<BITS> {
 
     /// Convert to a tick count in the range `0..2^BITS`.
     ///
-    /// If `BITS<64`, this type may use additional bits for extra precission.
+    /// If `BITS<64`, this type may use additional bits for extra precision.
     /// The rounding behaviour of `to_ticks` is unspecified.
     #[inline]
     pub fn to_ticks(self) -> u64 {
@@ -164,7 +164,7 @@ impl<const BITS: u32> Time for WrappingU64Time<BITS> {
 /// All involved durations must be less than half the maximum representable value:
 /// Less than 2^63 nanoseconds and less than 2^(BITS-1) ticks.
 ///
-/// The covnersion precision is best effort.
+/// The conversion precision is best effort.
 /// No particular precision guarantee is made.
 /// The current implementation produces results with an error of at most 1 result unit (nanosecond or tick).
 #[derive(Clone, Copy, Debug)]
