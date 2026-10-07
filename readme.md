@@ -8,6 +8,9 @@ There is no global state, no automatic fallbacks, no automatic calibration, and 
 `fast-clock` supports `no-std`, `no-alloc`, and targets without floating-point support.
 
 ```rust
+use fast_clock::{Clock, DurationCalibration, InherentlyCalibrated};
+use fast_clock::{tsc::Tsc, wrapping_u64::U64Calibration};
+
 // On Linux, verifies the kernel considers the TSC stable across cores.
 let tsc = Tsc::try_new_linux_sys().unwrap();
 
@@ -32,6 +35,12 @@ instants between the TSC domain and `std::time::Instant`. This is useful when
 correlating TSC measurements with wall-clock timestamps or other clocks.
 
 ```rust
+# use fast_clock::{Clock, InherentlyCalibrated};
+# use fast_clock::{tsc::Tsc, wrapping_u64::U64Calibration};
+# let tsc = Tsc::try_new_linux_sys().unwrap();
+# let (calibration, sync) =
+#     U64Calibration::new_with_std_instant(&tsc, std::time::Duration::from_millis(10));
+# let t0 = tsc.now();
 // Convert a TSC instant to std::time::Instant.
 let wall = sync.to_a(t0, &InherentlyCalibrated, &calibration);
 ```

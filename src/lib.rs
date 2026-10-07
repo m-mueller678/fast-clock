@@ -89,6 +89,20 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+/// Compiles the readme examples as doctests.
+///
+/// `doctest` is set only while rustdoc collects doctests, never during `cargo doc`,
+/// so the readme is tested without being rendered into these docs.
+#[cfg(all(
+    doctest,
+    feature = "std",
+    feature = "x86_64-tsc",
+    target_arch = "x86_64",
+    target_os = "linux"
+))]
+#[doc = include_str!("../readme.md")]
+pub struct ReadmeDoctests;
+
 mod clock_synchronization;
 use core::cmp::Ordering;
 use core::ops::{Add, Sub};
